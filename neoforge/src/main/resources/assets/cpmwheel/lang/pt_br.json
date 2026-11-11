@@ -1,0 +1,23 @@
+{
+  "key.categories.cpmwheel": "CPM Wheel",
+  "key.cpmwheel.open": "Abrir roda de animações",
+  "key.cpmwheel.edit": "Editar roda de animações",
+  "cpmwheel.title": "Roda de animações",
+  "cpmwheel.edit": "Editar",
+  "cpmwheel.hint": "Mouse: escolher • Clique/soltar: tocar • Botão direito: favorito • Scroll/Tab: página • 1-9",
+  "cpmwheel.nocpm": "O Customizable Player Models não está instalado",
+  "cpmwheel.edit.title": "Organizar roda",
+  "cpmwheel.edit.custom": "adicionar pelo nome...",
+  "cpmwheel.edit.newpage": "+ Página",
+  "cpmwheel.edit.delpage": "- Página",
+  "cpmwheel.edit.label": "Nome",
+  "cpmwheel.edit.icon": "Ícone (id do item)",
+  "cpmwheel.edit.value": "Valor / cor",
+  "cpmwheel.edit.color": "Cor",
+  "cpmwheel.edit.test": "Testar",
+  "cpmwheel.edit.select": "Arraste uma animação da lista para um slot. Clique num slot para editar, arraste slots para trocar de lugar, arraste um slot para a lista para limpar.",
+  "cpmwheel.edit.help": "Botão direito na lista: testar • Botão direito no slot: favorito • Scroll na roda: página",
+  "cpmwheel.edit.mode.hold": "Modo: segurar tecla",
+  "cpmwheel.edit.mode.toggle": "Modo: apertar para abrir/fechar",
+  "cpmwheel.edit.autofill": "Adicionar animações que faltam"
+}

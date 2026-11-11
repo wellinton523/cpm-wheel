@@ -1,0 +1,23 @@
+{
+  "key.categories.cpmwheel": "CPM Wheel",
+  "key.cpmwheel.open": "Open animation wheel",
+  "key.cpmwheel.edit": "Edit animation wheel",
+  "cpmwheel.title": "Animation wheel",
+  "cpmwheel.edit": "Edit",
+  "cpmwheel.hint": "Mouse: choose • Click/release: play • Right click: favorite • Scroll/Tab: page • 1-9",
+  "cpmwheel.nocpm": "Customizable Player Models is not installed",
+  "cpmwheel.edit.title": "Organize wheel",
+  "cpmwheel.edit.custom": "add by name...",
+  "cpmwheel.edit.newpage": "+ Page",
+  "cpmwheel.edit.delpage": "- Page",
+  "cpmwheel.edit.label": "Label",
+  "cpmwheel.edit.icon": "Icon (item id)",
+  "cpmwheel.edit.value": "Value / color",
+  "cpmwheel.edit.color": "Color",
+  "cpmwheel.edit.test": "Test",
+  "cpmwheel.edit.select": "Drag an animation from the list onto a slot. Click a slot to edit it, drag slots to swap, drag a slot to the list to clear it.",
+  "cpmwheel.edit.help": "Right click list item: preview • Right click slot: favorite • Scroll on wheel: page",
+  "cpmwheel.edit.mode.hold": "Mode: hold key",
+  "cpmwheel.edit.mode.toggle": "Mode: press to toggle",
+  "cpmwheel.edit.autofill": "Add missing animations"
+}

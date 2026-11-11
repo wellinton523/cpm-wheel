@@ -1,0 +1,57 @@
+package com.welli.cpmwheel;
+
+import com.mojang.blaze3d.platform.InputConstants;
+import net.minecraft.client.KeyMapping;
+import net.minecraft.client.Minecraft;
+import net.neoforged.api.distmarker.Dist;
+import net.neoforged.bus.api.IEventBus;
+import net.neoforged.fml.ModContainer;
+import net.neoforged.neoforge.client.event.RegisterKeyMappingsEvent;
+import net.neoforged.neoforge.common.NeoForge;
+import net.neoforged.neoforge.client.event.ClientTickEvent;
+import net.neoforged.fml.InterModComms;
+import net.neoforged.fml.ModList;
+import net.neoforged.fml.common.Mod;
+import net.neoforged.fml.event.lifecycle.InterModEnqueueEvent;
+import org.lwjgl.glfw.GLFW;
+import org.slf4j.Logger;
+import com.mojang.logging.LogUtils;
+
+@Mod(CpmWheel.MODID)
+public class CpmWheel {
+    public static final String MODID = "cpmwheel";
+    public static final Logger LOG = LogUtils.getLogger();
+
+    public static final KeyMapping KEY_WHEEL = new KeyMapping("key.cpmwheel.open",
+            InputConstants.Type.KEYSYM, GLFW.GLFW_KEY_G, "key.categories.cpmwheel");
+    public static final KeyMapping KEY_EDIT = new KeyMapping("key.cpmwheel.edit",
+            InputConstants.Type.KEYSYM, InputConstants.UNKNOWN.getValue(), "key.categories.cpmwheel");
+
+    public CpmWheel(IEventBus bus, ModContainer container, Dist dist) {
+        if (dist != Dist.CLIENT) return;
+        bus.addListener(this::keys);
+        bus.addListener(this::imc);
+        NeoForge.EVENT_BUS.addListener(this::tick);
+    }
+
+    private void keys(RegisterKeyMappingsEvent e) {
+        e.register(KEY_WHEEL);
+        e.register(KEY_EDIT);
+    }
+
+    private void imc(InterModEnqueueEvent e) {
+        if (ModList.get().isLoaded("cpm")) {
+            InterModComms.sendTo("cpm", "api", CpmBridge::createPluginProxy);
+        }
+    }
+
+    private void tick(ClientTickEvent.Post e) {
+        Minecraft mc = Minecraft.getInstance();
+        while (KEY_WHEEL.consumeClick()) {
+            if (mc.screen == null && mc.player != null) mc.setScreen(new WheelScreen(true));
+        }
+        while (KEY_EDIT.consumeClick()) {
+            if (mc.screen == null && mc.player != null) mc.setScreen(new EditScreen(null));
+        }
+    }
+}
