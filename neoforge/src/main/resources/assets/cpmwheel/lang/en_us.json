@@ -226,5 +226,18 @@
   "cpmwheel.adj.c.food": "food",
   "cpmwheel.adj.c.lantern": "lantern",
   "cpmwheel.adj.c.torch": "torch",
-  "cpmwheel.adj.c.other": "other"
+  "cpmwheel.adj.c.other": "other",
+  "cpmwheel.ha.armadj": "Arm adjust...",
+  "cpmwheel.arm.title": "Arm adjust (1st person)",
+  "cpmwheel.arm.main": "Hand: main",
+  "cpmwheel.arm.off": "Hand: off",
+  "cpmwheel.arm.x": "X (side): %s",
+  "cpmwheel.arm.y": "Y (height): %s",
+  "cpmwheel.arm.z": "Z (forward): %s",
+  "cpmwheel.arm.rx": "Rotate X: %s°",
+  "cpmwheel.arm.ry": "Rotate Y: %s°",
+  "cpmwheel.arm.rz": "Rotate Z: %s°",
+  "cpmwheel.arm.scale": "Size: %s%%",
+  "cpmwheel.adj.r3d": "Render: 3D",
+  "cpmwheel.adj.r2d": "Render: 2D"
 }

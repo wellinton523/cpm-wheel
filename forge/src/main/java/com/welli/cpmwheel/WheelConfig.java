@@ -196,7 +196,7 @@ public class WheelConfig {
     public String centerMode = "player";
     /** center size in percent (50-200) */
     public int centerSize = 100;
-    public int configVersion = 12;
+    public int configVersion = 13;
     private static final String LEGACY_DESIGN = "signalis";
     /** HUD grouped by wheel/folder with nested bars; false = flat list */
     public boolean hudGrouped = true;
@@ -231,6 +231,9 @@ public class WheelConfig {
     public java.util.Map<String, int[]> haAdj = new java.util.HashMap<>();
     public boolean haVanillaItem = false;
     public boolean haTwoHandBlock = false;
+    /** 1.5.4: categories drawn 2D (flat item) instead of 3D (lantern, torch, block each separate); arm adjust per hand */
+    public List<String> haFlat = new ArrayList<>();
+    public java.util.Map<String, int[]> haArm = new java.util.HashMap<>();
     public int haIntensity = 100, haIdle = 100, haBob = 100, haInertia = 100, haPose = 100, haSwing = 100;
     public boolean frameSegments = true;
     public boolean hudEnabled = true;
@@ -279,6 +282,7 @@ public class WheelConfig {
                         c.configVersion = 4;
                     }
                     if (c.configVersion < 7) c.innerRing = false; // 1.4.4: center ring off once on upgrade
+                    if (c.configVersion < 13) c.configVersion = 13; // 1.5.4: haFlat + haArm (new fields, empty = defaults)
                     if (c.configVersion < 12) { c.configVersion = 12; c.haTwoHandBlock = false; } // 1.5.3: blocks held with one hand by default
                     if (c.configVersion < 11) c.configVersion = 11; // 1.5.0: hand animations (new fields, defaults on, set in fixup)
                     if (c.configVersion < 10) c.configVersion = 10; // 1.4.7: handGlow (default auto, set in fixup) // 1.4.6: group members -> actions (fixup), keybinds, conditional slots // 1.4.5: group slots (new fields, default none)
@@ -320,6 +324,10 @@ public class WheelConfig {
         if (handAnimOff == null) handAnimOff = new ArrayList<>();
         if (haIgnore == null) haIgnore = new ArrayList<>();
         if (haAdj == null) haAdj = new java.util.HashMap<>();
+        if (haFlat == null) haFlat = new ArrayList<>();
+        haFlat.removeIf(k -> k == null || java.util.Arrays.asList(HandAnim.CATS).indexOf(k) < 0);
+        if (haArm == null) haArm = new java.util.HashMap<>();
+        haArm.entrySet().removeIf(e -> !("main".equals(e.getKey()) || "off".equals(e.getKey())) || e.getValue() == null || e.getValue().length != 7);
         haAdj.entrySet().removeIf(e -> e.getKey() == null || e.getValue() == null || e.getValue().length != 7 || java.util.Arrays.asList(HandAnim.CATS).indexOf(e.getKey()) < 0);
         handAnimOff.removeIf(f -> f == null || HandAnim.fi(f) < 0);
         haIntensity = clamp(haIntensity, 0, 200); haIdle = clamp(haIdle, 0, 200); haBob = clamp(haBob, 0, 200);

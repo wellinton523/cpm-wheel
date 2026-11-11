@@ -57,6 +57,11 @@ public final class HandAnim {
         int[][] na = new int[CATS.length][7];
         for (int i = 0; i < CATS.length; i++) { int[] v = c.haAdj.get(CATS[i]); if (v != null && v.length == 7) na[i] = v.clone(); }
         adj = na; vanillaItem = c.haVanillaItem; twoHandBlock = c.haTwoHandBlock;
+        boolean[] fl = new boolean[CATS.length]; for (int i = 0; i < CATS.length; i++) fl[i] = c.haFlat.contains(CATS[i]); flatCats = fl;
+        int[][] am = new int[2][7];
+        int[] m = c.haArm.get("main"), o = c.haArm.get("off");
+        if (m != null && m.length == 7) am[0] = m.clone(); if (o != null && o.length == 7) am[1] = o.clone();
+        arm = am;
         if (!c.haIgnore.equals(ignored)) { ignored = java.util.List.copyOf(c.haIgnore); recompute(true); }
     }
     static int fi(String f) { for (int i = 0; i < FEATURES.length; i++) if (FEATURES[i].equals(f)) return i; return -1; }
@@ -230,14 +235,16 @@ public final class HandAnim {
     public static boolean apply(PoseStack ps, InteractionHand hand, ItemStack stack, float pt, float swing, float equip, MultiBufferSource buf, int light) {
         lastHandMs = System.currentTimeMillis();
         if (!logHand) { logHand = true; LOG.info("[cpmwheel] hand animations: stage 3 hand event received (master=" + master + ", allBlocked=" + allBlocked + ", failed=" + failed + ")"); }
-        if (!master || allBlocked || failed) return false;
         Minecraft mc = Minecraft.getInstance(); LocalPlayer p = mc.player;
-        if (p == null || Float.isNaN(sYaw)) return false;
+        if (p == null) return false;
         try {
             // undo what we did to the other hand this frame (vanilla does not push between hands)
             PoseStack.Pose last = ps.last();
             if (savedFor == last && savedFrame == frame) { last.pose().set(savedPose); last.normal().set(savedNormal); }
             else { savedPose.set(last.pose()); savedNormal.set(last.normal()); savedFor = last; savedFrame = frame; }
+            // arm position adjust: always applies, even with the other hand animations off
+            armAdjust(ps, hand == InteractionHand.MAIN_HAND, (hand == InteractionHand.MAIN_HAND) == (p.getMainArm() == HumanoidArm.RIGHT) ? 1 : -1);
+            if (!master || allBlocked || failed || Float.isNaN(sYaw)) return false;
             if (!loggedFirst) { loggedFirst = true; LOG.info("[cpmwheel] hand animations: stage 4 transforms applied (first frame)"); }
 
             boolean right = (hand == InteractionHand.MAIN_HAND) == (p.getMainArm() == HumanoidArm.RIGHT);
@@ -282,7 +289,7 @@ public final class HandAnim {
             if (f(9)) {
                 // both arms: the empty off-hand arm is not drawn by vanilla, so the main-hand pass draws it too
                 if ((swimW > 0.05f || climbW > 0.05f) && hand == InteractionHand.MAIN_HAND && p.getOffhandItem().isEmpty() && buf != null && !p.isInvisible()) {
-                    ps.pushPose(); stroke(ps, -side, G); armChain(ps, -side, 0, 0); drawArm(ps, p, buf, light, !right); ps.popPose();
+                    ps.pushPose(); restoreSaved(ps); armAdjust(ps, false, -side); stroke(ps, -side, G); armChain(ps, -side, 0, 0); drawArm(ps, p, buf, light, !right); ps.popPose();
                 }
                 stroke(ps, side, G);
             }
@@ -317,6 +324,25 @@ public final class HandAnim {
             {0, 0, 0, 90, 0, 0, 0}};     // other
     static volatile int[][] adj = new int[CATS.length][7];
     static volatile boolean vanillaItem = false, twoHandBlock = false;
+    static volatile boolean[] flatCats = new boolean[12];
+    /** arm adjust {x,y,z (1/100 block), rx,ry,rz (deg), scale % offset} for main [0] and off hand [1] */
+    static volatile int[][] arm = new int[2][7];
+
+    /** view-space arm adjust around the vanilla hand area so rotations/scale stay local; mirrored for the left arm */
+    static void armAdjust(PoseStack ps, boolean main, float side) {
+        int[] a = arm[main ? 0 : 1];
+        boolean any = false; for (int v : a) if (v != 0) { any = true; break; }
+        if (!any) return;
+        float px = side * 0.6f, py = -0.55f, pz = -0.9f;
+        ps.translate(px + side * a[0] / 100f, py + a[1] / 100f, pz + a[2] / 100f);
+        if (a[4] != 0) ps.mulPose(Axis.YP.rotationDegrees(side * a[4]));
+        if (a[3] != 0) ps.mulPose(Axis.XP.rotationDegrees(a[3]));
+        if (a[5] != 0) ps.mulPose(Axis.ZP.rotationDegrees(side * a[5]));
+        float sc = Math.max(0.2f, 1 + a[6] / 100f);
+        if (sc != 1) ps.scale(sc, sc, sc);
+        ps.translate(-px, -py, -pz);
+    }
+    private static void restoreSaved(PoseStack ps) { ps.last().pose().set(savedPose); ps.last().normal().set(savedNormal); }
 
     static int cat(ItemStack s) {
         Item it = s.getItem();
@@ -390,7 +416,7 @@ public final class HandAnim {
         int c = cat(stack);
         boolean two = c == 7 && twoHandBlock && hand == InteractionHand.MAIN_HAND && p.getOffhandItem().isEmpty();
         ps.pushPose(); armChain(ps, f, swing, equip); drawArm(ps, p, buf, light, right); ps.popPose();
-        if (two) { ps.pushPose(); armChain(ps, -f, 0, equip); drawArm(ps, p, buf, light, !right); ps.popPose(); }
+        if (two) { ps.pushPose(); armAdjust(ps, false, -f); armChain(ps, -f, 0, equip); drawArm(ps, p, buf, light, !right); ps.popPose(); }
 
         org.joml.Vector3f fp = fist(f, swing, equip);
         int[] b = BASE[c], a = adj[c];
@@ -404,7 +430,8 @@ public final class HandAnim {
         if (b[5] + a[5] != 0) ps.mulPose(Axis.YP.rotationDegrees(f * (b[5] + a[5])));
         if (b[4] + a[4] != 0) ps.mulPose(Axis.XP.rotationDegrees(b[4] + a[4]));
         if (b[6] + a[6] != 0) ps.mulPose(Axis.ZP.rotationDegrees(f * (b[6] + a[6])));
-        if (c == 9 || c == 10) {
+        boolean flat = flatCats[c];
+        if ((c == 9 || c == 10) && !flat) {
             net.minecraft.world.level.block.state.BlockState st = ((BlockItem) it).getBlock().defaultBlockState();
             if (c == 9) {
                 if (st.hasProperty(net.minecraft.world.level.block.LanternBlock.HANGING)) st = st.setValue(net.minecraft.world.level.block.LanternBlock.HANGING, true);
@@ -418,12 +445,14 @@ public final class HandAnim {
                 ps.translate(-0.5f, -0.25f, -0.5f);  // grip a quarter up the stick
             }
             Minecraft.getInstance().getBlockRenderer().renderSingleBlock(st, ps, buf, light, net.minecraft.client.renderer.texture.OverlayTexture.NO_OVERLAY);
-        } else if (c == 7) {                         // blocks: upright, small, vanilla first-person block pose
+        } else if (c == 7 && !flat) {                         // blocks: upright, small, vanilla first-person block pose
             ps.scale(sc, sc, sc);
             Minecraft.getInstance().getEntityRenderDispatcher().getItemInHandRenderer().renderItem(p, stack,
                     right ? net.minecraft.world.item.ItemDisplayContext.FIRST_PERSON_RIGHT_HAND : net.minecraft.world.item.ItemDisplayContext.FIRST_PERSON_LEFT_HAND,
                     !right, ps, buf, light);
         } else {                                     // everything else: held like third person, grip in the fist
+            if (c == 9 && f(11)) { ps.mulPose(Axis.ZP.rotationDegrees(lanZ * f * 0.8f)); ps.mulPose(Axis.XP.rotationDegrees(lanX * 0.8f)); }
+            if (c == 10 && f(11)) ps.mulPose(Axis.ZP.rotationDegrees(lanZ * f * 0.15f));
             ps.mulPose(new org.joml.Quaternionf(GRIP));
             ps.scale(sc, sc, sc);
             Minecraft.getInstance().getEntityRenderDispatcher().getItemInHandRenderer().renderItem(p, stack,
