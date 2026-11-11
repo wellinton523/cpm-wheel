@@ -171,7 +171,7 @@
   "cpmwheel.ha.title": "Hand animations (1st person)",
   "cpmwheel.ha.master": "Hand animations: %s",
   "cpmwheel.ha.blocked": "other mod",
-  "cpmwheel.ha.conflict": "Disabled by another mod: %s",
+  "cpmwheel.ha.conflict": "Compatibility: %s",
   "cpmwheel.ha.f.idle": "Idle breathing",
   "cpmwheel.ha.f.bob": "Walk/sprint bob",
   "cpmwheel.ha.f.inertia": "Camera inertia",
@@ -190,5 +190,14 @@
   "cpmwheel.ha.int.swing": "Attack: %s%%",
   "cpmwheel.ha.f.arm": "Arm with items",
   "cpmwheel.ha.f.carry": "Two-hand block carry",
-  "cpmwheel.ha.f.lantern": "Lantern/torch hold"
+  "cpmwheel.ha.f.lantern": "Lantern/torch hold",
+  "cpmwheel.ha.ignore": "Ignore %s: %s",
+  "cpmwheel.ha.status": "Status: %s",
+  "cpmwheel.ha.st.ok": "Active",
+  "cpmwheel.ha.st.off": "off (master toggle)",
+  "cpmwheel.ha.st.blocked": "disabled by another mod (%s)",
+  "cpmwheel.ha.st.error": "error (see log)",
+  "cpmwheel.ha.st.noworld": "join a world",
+  "cpmwheel.ha.st.noframe": "frame event not received",
+  "cpmwheel.ha.st.nohand": "hand event not received (another mod cancels the hand?)"
 }

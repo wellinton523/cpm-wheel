@@ -171,7 +171,7 @@
   "cpmwheel.ha.title": "Animações da mão (1ª pessoa)",
   "cpmwheel.ha.master": "Animações da mão: %s",
   "cpmwheel.ha.blocked": "outro mod",
-  "cpmwheel.ha.conflict": "Desativado por outro mod: %s",
+  "cpmwheel.ha.conflict": "Compatibilidade: %s",
   "cpmwheel.ha.f.idle": "Respiração parada",
   "cpmwheel.ha.f.bob": "Balanço andar/correr",
   "cpmwheel.ha.f.inertia": "Inércia da câmera",
@@ -190,5 +190,14 @@
   "cpmwheel.ha.int.swing": "Ataque: %s%%",
   "cpmwheel.ha.f.arm": "Braço visível c/ item",
   "cpmwheel.ha.f.carry": "Bloco com 2 mãos",
-  "cpmwheel.ha.f.lantern": "Lanterna/tocha"
+  "cpmwheel.ha.f.lantern": "Lanterna/tocha",
+  "cpmwheel.ha.ignore": "Ignorar %s: %s",
+  "cpmwheel.ha.status": "Status: %s",
+  "cpmwheel.ha.st.ok": "Ativo",
+  "cpmwheel.ha.st.off": "desligado (chave geral)",
+  "cpmwheel.ha.st.blocked": "desativado por outro mod (%s)",
+  "cpmwheel.ha.st.error": "erro (veja o log)",
+  "cpmwheel.ha.st.noworld": "entre num mundo",
+  "cpmwheel.ha.st.noframe": "evento de frame não chegou",
+  "cpmwheel.ha.st.nohand": "evento da mão não chegou (outro mod cancela a mão?)"
 }

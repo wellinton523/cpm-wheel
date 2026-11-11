@@ -32,34 +32,92 @@ public final class HandAnim {
     static final boolean[] on = new boolean[FEATURES.length];
     static { java.util.Arrays.fill(on, true); }
     static volatile float gI = 1, bobI = 1, inerI = 1, poseI = 1, swingI = 1, idleI = 1;
-    /** features switched off because another mod handles them */
+    /** features switched off because another mod handles them (recomputed in load() from detected mods + "ignore" overrides) */
     static final boolean[] blocked = new boolean[FEATURES.length];
     static volatile boolean allBlocked = false;
     public static String conflictText = "";
+    /** other mods we know about: key, display name, mod ids */
+    public static final String[][] MODS = {
+            {"hmi", "Hold My Items", "hold_my_items", "holdmyitems"},
+            {"fpm", "First Person Model", "firstperson", "firstpersonmod"},
+            {"realcamera", "Real Camera", "realcamera"},
+            {"bettercombat", "Better Combat", "bettercombat"},
+            {"eating", "Eating Animation", "eating_animation", "eatinganimation"}};
+    public static final boolean[] modLoaded = new boolean[MODS.length];
+    private static java.util.List<String> ignored = java.util.List.of();
+    /** Better Combat present and not ignored: our swing variations pause while a BC attack runs */
+    static volatile boolean bcCompat = false;
+    static volatile boolean failed = false;
 
     public static void load(WheelConfig c) {
         master = c.handAnim;
         for (int i = 0; i < FEATURES.length; i++) on[i] = !c.handAnimOff.contains(FEATURES[i]);
         gI = c.haIntensity / 100f; bobI = c.haBob / 100f; inerI = c.haInertia / 100f;
         poseI = c.haPose / 100f; swingI = c.haSwing / 100f; idleI = c.haIdle / 100f;
+        if (!c.haIgnore.equals(ignored)) { ignored = java.util.List.copyOf(c.haIgnore); recompute(true); }
     }
     static int fi(String f) { for (int i = 0; i < FEATURES.length; i++) if (FEATURES[i].equals(f)) return i; return -1; }
     static boolean f(int i) { return on[i] && !blocked[i]; }
+    public static boolean active(String mod) { for (int i = 0; i < MODS.length; i++) if (MODS[i][0].equals(mod)) return modLoaded[i] && !ignored.contains(mod); return false; }
 
     /** called once at client setup with the loader's "is mod loaded" check */
     public static void detectConflicts(java.util.function.Predicate<String> loaded) {
-        StringBuilder sb = new StringBuilder();
-        if (any(loaded, "hold_my_items", "holdmyitems")) { allBlocked = true; note(sb, "Hold My Items: all"); }
-        if (any(loaded, "firstperson", "firstpersonmod")) { allBlocked = true; note(sb, "First Person Model: all"); }
-        if (any(loaded, "realcamera")) { block("arm", "carry", "bob", "inertia", "jump", "sneak", "swim", "idle"); note(sb, "Real Camera: arm/carry/idle/bob/inertia/jump/sneak/swim"); }
-        if (any(loaded, "bettercombat")) { block("swing", "poses", "arm", "carry"); note(sb, "Better Combat: poses/swing/arm/carry"); }
-        if (any(loaded, "eating_animation", "eatinganimation")) { block("eat"); note(sb, "Eating Animation: eat"); }
-        conflictText = sb.toString();
-        if (!conflictText.isEmpty()) LOG.info("[cpmwheel] hand animations: disabled because of other mods -> " + conflictText);
+        for (int i = 0; i < MODS.length; i++) for (int j = 2; j < MODS[i].length; j++) if (loaded.test(MODS[i][j])) modLoaded[i] = true;
+        LOG.info("[cpmwheel] hand animations: stage 1 registered (events on game bus, client dist)");
+        recompute(true);
     }
-    private static boolean any(java.util.function.Predicate<String> l, String... ids) { for (String s : ids) if (l.test(s)) return true; return false; }
+
+    private static void recompute(boolean log) {
+        java.util.Arrays.fill(blocked, false);
+        boolean all = false; bcCompat = false;
+        StringBuilder sb = new StringBuilder();
+        if (active("hmi")) { all = true; note(sb, "Hold My Items: all"); }
+        if (active("fpm")) { all = true; note(sb, "First Person Model: all"); }
+        if (active("realcamera")) { block("arm", "carry", "bob", "inertia", "jump", "sneak", "swim", "idle"); note(sb, "Real Camera: arm/carry/idle/bob/inertia/jump/sneak/swim"); }
+        if (active("bettercombat")) { bcCompat = true; note(sb, "Better Combat: swing variations pause during BC attacks"); }
+        if (active("eating")) { block("eat"); note(sb, "Eating Animation: eat"); }
+        allBlocked = all;
+        conflictText = sb.toString();
+        if (log) LOG.info("[cpmwheel] hand animations: compat -> " + (conflictText.isEmpty() ? "none" : conflictText) + " (ignored: " + ignored + ")");
+    }
     private static void block(String... f) { for (String s : f) blocked[fi(s)] = true; }
     private static void note(StringBuilder sb, String s) { if (sb.length() > 0) sb.append("; "); sb.append(s); }
+
+    // ---- Better Combat attack detection (reflection on the client-side BC interface, else assume attacking) ----
+    private static java.lang.reflect.Method bcSwing; private static boolean bcLooked;
+    static boolean bcAttacking() {
+        if (!bcCompat) return false;
+        Minecraft mc = Minecraft.getInstance();
+        if (!bcLooked) {
+            bcLooked = true;
+            for (String n : new String[]{"isWeaponSwingInProgress", "getSwingProgress"}) {
+                try { bcSwing = mc.getClass().getMethod(n); break; } catch (Throwable ignored) {}
+            }
+            LOG.info("[cpmwheel] hand animations: Better Combat API " + (bcSwing != null ? "found (" + bcSwing.getName() + ")" : "not found -> our swing variations stay off"));
+        }
+        if (bcSwing == null) return true;
+        try {
+            Object r = bcSwing.invoke(mc);
+            if (r instanceof Boolean b) return b;
+            if (r instanceof Number n) { float v = n.floatValue(); return v > 0 && v < 1; }
+        } catch (Throwable ignored) {}
+        return true;
+    }
+
+    // ---- pipeline status (shown on the settings screen) ----
+    static volatile long lastFrameMs, lastHandMs, lastApplyMs;
+    private static boolean logFrame, logHand;
+    /** translation key + arg of the status line */
+    public static String[] status() {
+        long now = System.currentTimeMillis();
+        if (failed) return new String[]{"cpmwheel.ha.st.error", ""};
+        if (!master) return new String[]{"cpmwheel.ha.st.off", ""};
+        if (allBlocked) return new String[]{"cpmwheel.ha.st.blocked", conflictText};
+        if (Minecraft.getInstance().player == null) return new String[]{"cpmwheel.ha.st.noworld", ""};
+        if (now - lastFrameMs > 3000) return new String[]{"cpmwheel.ha.st.noframe", ""};
+        if (now - lastHandMs > 3000) return new String[]{"cpmwheel.ha.st.nohand", ""};
+        return new String[]{"cpmwheel.ha.st.ok", ""};
+    }
 
     // ---- per-tick state (client thread) ----
     private static int lastSlot = -1; private static Item lastMain = null;
@@ -96,6 +154,8 @@ public final class HandAnim {
     /** loader calls this at the start of every rendered frame */
     public static void frameStart() {
         frame++;
+        lastFrameMs = System.currentTimeMillis();
+        if (!logFrame) { logFrame = true; LOG.info("[cpmwheel] hand animations: stage 2 frame event received"); }
         long now = System.nanoTime();
         float dt = lastNs == 0 ? 0.016f : Mth.clamp((now - lastNs) / 1e9f, 0f, 0.1f);
         lastNs = now;
@@ -160,7 +220,9 @@ public final class HandAnim {
 
     /** apply to the hand PoseStack; called from the loader's RenderHandEvent for each hand */
     public static void apply(PoseStack ps, InteractionHand hand, ItemStack stack, float pt, float swing, float equip, MultiBufferSource buf, int light) {
-        if (!master || allBlocked) return;
+        lastHandMs = System.currentTimeMillis();
+        if (!logHand) { logHand = true; LOG.info("[cpmwheel] hand animations: stage 3 hand event received (master=" + master + ", allBlocked=" + allBlocked + ", failed=" + failed + ")"); }
+        if (!master || allBlocked || failed) return;
         Minecraft mc = Minecraft.getInstance(); LocalPlayer p = mc.player;
         if (p == null || Float.isNaN(sYaw)) return;
         try {
@@ -168,7 +230,7 @@ public final class HandAnim {
             PoseStack.Pose last = ps.last();
             if (savedFor == last && savedFrame == frame) { last.pose().set(savedPose); last.normal().set(savedNormal); }
             else { savedPose.set(last.pose()); savedNormal.set(last.normal()); savedFor = last; savedFrame = frame; }
-            if (!loggedFirst) { loggedFirst = true; LOG.info("[cpmwheel] hand animations active (first frame)"); }
+            if (!loggedFirst) { loggedFirst = true; LOG.info("[cpmwheel] hand animations: stage 4 transforms applied (first frame)"); }
 
             boolean right = (hand == InteractionHand.MAIN_HAND) == (p.getMainArm() == HumanoidArm.RIGHT);
             float side = right ? 1 : -1, G = gI;
@@ -195,7 +257,7 @@ public final class HandAnim {
             float[] pz = pose[hand == InteractionHand.MAIN_HAND ? 0 : 1];
             float P = G * poseI;
             tx += pz[0] * side * P; ty += pz[1] * P; tz += pz[2] * P; rx += pz[3] * P; ry += pz[4] * side * P; rz += pz[5] * side * P;
-            if (f(7) && swing > 0 && hand == InteractionHand.MAIN_HAND) {
+            if (f(7) && swing > 0 && hand == InteractionHand.MAIN_HAND && !bcAttacking()) {
                 float s = Mth.sin(swing * (float) Math.PI) * G * swingI; Item it = stack.getItem();
                 if (stack.isEmpty()) tz -= 0.05f * s;
                 else if (it instanceof AxeItem) { rx -= 30f * s; ty -= 0.04f * s; }                          // heavy overhead chop
@@ -220,10 +282,10 @@ public final class HandAnim {
             heldExtras(ps, p, hand, stack, swing, equip, buf, light, side, right);
         } catch (Throwable th) {
             if (!loggedErr) { loggedErr = true; LOG.warn("[cpmwheel] hand animation error (disabled for this session)", th); }
-            master = false;
+            failed = true;
         }
     }
-    private static boolean loggedErr;
+    private static boolean loggedErr, logArm;
 
     // ---- arm visible with items, two-handed carry, lantern/torch hold ----
     // the vanilla empty-hand arm ends ~(0.72,-0.51,-1.09) in view space; vanilla items sit ~(0.6,-0.4,-0.7):
@@ -284,6 +346,7 @@ public final class HandAnim {
         ps.mulPose(Axis.YP.rotationDegrees(f * -135f));
         ps.translate(f * 5.6f, 0f, 0f);
         AbstractClientPlayer ap = p;
+        if (!logArm) { logArm = true; LOG.info("[cpmwheel] hand animations: stage 5 arm-with-item drawn via " + pr.getClass().getName()); }
         if (right) pr.renderRightHand(ps, buf, light, ap); else pr.renderLeftHand(ps, buf, light, ap);
         ps.popPose();
     }

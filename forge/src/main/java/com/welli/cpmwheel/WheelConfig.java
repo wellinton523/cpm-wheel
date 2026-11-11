@@ -225,6 +225,8 @@ public class WheelConfig {
     /** 1.5.0 first-person hand animations: master toggle, disabled feature ids, intensities in percent (0-200) */
     public boolean handAnim = true;
     public List<String> handAnimOff = new ArrayList<>();
+    /** 1.5.2: other mods whose compat rules are ignored (HandAnim.MODS keys) */
+    public List<String> haIgnore = new ArrayList<>();
     public int haIntensity = 100, haIdle = 100, haBob = 100, haInertia = 100, haPose = 100, haSwing = 100;
     public boolean frameSegments = true;
     public boolean hudEnabled = true;
@@ -311,6 +313,7 @@ public class WheelConfig {
         if (!java.util.Arrays.asList(FpState.MODES).contains(fpAnimations)) fpAnimations = "layers";
         if (!java.util.Arrays.asList(HandGlow.MODES).contains(handGlow)) handGlow = "auto";
         if (handAnimOff == null) handAnimOff = new ArrayList<>();
+        if (haIgnore == null) haIgnore = new ArrayList<>();
         handAnimOff.removeIf(f -> f == null || HandAnim.fi(f) < 0);
         haIntensity = clamp(haIntensity, 0, 200); haIdle = clamp(haIdle, 0, 200); haBob = clamp(haBob, 0, 200);
         haInertia = clamp(haInertia, 0, 200); haPose = clamp(haPose, 0, 200); haSwing = clamp(haSwing, 0, 200);

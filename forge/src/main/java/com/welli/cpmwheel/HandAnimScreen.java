@@ -11,6 +11,7 @@ import net.minecraft.network.chat.Component;
 public class HandAnimScreen extends Screen {
     private final Screen parent;
     private final WheelConfig cfg;
+    private int confY;
     public HandAnimScreen(Screen parent, WheelConfig cfg) { super(Component.translatable("cpmwheel.ha.title")); this.parent = parent; this.cfg = cfg; }
 
     private static String onoff(boolean b) { return b ? "ON" : "OFF"; }
@@ -47,6 +48,16 @@ public class HandAnimScreen extends Screen {
         slider(x2, y, "cpmwheel.ha.int.inertia", cfg.haInertia, v -> cfg.haInertia = v); y += 22;
         slider(x2, y, "cpmwheel.ha.int.pose", cfg.haPose, v -> cfg.haPose = v); y += 22;
         slider(x2, y, "cpmwheel.ha.int.swing", cfg.haSwing, v -> cfg.haSwing = v); y += 22;
+        int iy = y + 22 * 3 + 4;
+        for (int m = 0; m < HandAnim.MODS.length; m++) {
+            if (!HandAnim.modLoaded[m]) continue;
+            String key = HandAnim.MODS[m][0];
+            addRenderableWidget(Button.builder(Component.translatable("cpmwheel.ha.ignore", HandAnim.MODS[m][1], onoff(cfg.haIgnore.contains(key))), b -> {
+                if (!cfg.haIgnore.remove(key)) cfg.haIgnore.add(key);
+                HandAnim.load(cfg); rebuildWidgets(); }).bounds(x2, iy, 150, 20).build());
+            iy += 22;
+        }
+        confY = iy + 4;
         addRenderableWidget(Button.builder(Component.translatable("gui.done"), b -> onClose()).bounds(x, height - 26, 304, 20).build());
     }
 
@@ -54,8 +65,11 @@ public class HandAnimScreen extends Screen {
     public void render(GuiGraphics g, int mx, int my, float pt) {
         g.fill(0, 0, width, height, 0xC0050A12);
         g.drawString(font, title, 8, 10, Style.accent(cfg));
+        String[] st = HandAnim.status();
+        boolean ok = st[0].endsWith(".ok");
+        g.drawString(font, Component.translatable("cpmwheel.ha.status", Component.translatable(st[0], st[1])), 8 + font.width(title) + 12, 10, ok ? 0x3BFF9D : 0xFF6B6B);
         if (!HandAnim.conflictText.isEmpty())
-            g.drawWordWrap(font, Component.translatable("cpmwheel.ha.conflict", HandAnim.conflictText), 162, 26 + 24 + 22 * 9 + 8, Math.max(100, width - 170), 0xFFB347);
+            g.drawWordWrap(font, Component.translatable("cpmwheel.ha.conflict", HandAnim.conflictText), 162, confY, Math.max(100, width - 170), 0xFFB347);
         super.render(g, mx, my, pt);
     }
 
