@@ -28,5 +28,53 @@ final class Draw {
         RenderSystem.disableBlend();
     }
 
+
+    private static BufferBuilder start(VertexFormat.Mode mode) {
+        RenderSystem.enableBlend();
+        RenderSystem.defaultBlendFunc();
+        RenderSystem.disableCull();
+        RenderSystem.setShader(GameRenderer::getPositionColorShader);
+        return Tesselator.getInstance().begin(mode, DefaultVertexFormat.POSITION_COLOR);
+    }
+    private static void v(BufferBuilder b, Matrix4f m, float x, float y, int argb) {
+        b.addVertex(m, x, y, 0).setColor((argb >> 16) & 255, (argb >> 8) & 255, argb & 255, argb >>> 24);
+    }
+    private static void finish(BufferBuilder b) {
+        BufferUploader.drawWithShader(b.buildOrThrow());
+        RenderSystem.enableCull();
+        RenderSystem.disableBlend();
+    }
+
+    /** convex polygon as a triangle fan around (fx, fy) */
+    static void poly(GuiGraphics g, float[] xs, float[] ys, int n, float fx, float fy, int argb) {
+        if (n < 3) return;
+        Matrix4f m = g.pose().last().pose();
+        BufferBuilder b = start(VertexFormat.Mode.TRIANGLE_FAN);
+        v(b, m, fx, fy, argb);
+        for (int i = n - 1; i >= 0; i--) v(b, m, xs[i], ys[i], argb); // counter-clockwise on screen
+        v(b, m, xs[n - 1], ys[n - 1], argb);
+        finish(b);
+    }
+
+    private static void quad(BufferBuilder b, Matrix4f m, float x0, float y0, float x1, float y1, int argb) {
+        v(b, m, x0, y1, argb); v(b, m, x1, y1, argb); v(b, m, x1, y0, argb); v(b, m, x0, y0, argb);
+    }
+
+    /** dotted grid in one draw call */
+    static void grid(GuiGraphics g, int x0, int y0, int x1, int y1, int step, int size, int argb) {
+        Matrix4f m = g.pose().last().pose();
+        BufferBuilder b = start(VertexFormat.Mode.QUADS);
+        for (int y = y0 + step / 2; y < y1; y += step) for (int x = x0 + step / 2; x < x1; x += step) quad(b, m, x, y, x + size, y + size, argb);
+        finish(b);
+    }
+
+    /** horizontal scanlines in one draw call */
+    static void scanlines(GuiGraphics g, int w, int h, int step, int argb) {
+        Matrix4f m = g.pose().last().pose();
+        BufferBuilder b = start(VertexFormat.Mode.QUADS);
+        for (int y = 0; y < h; y += step) quad(b, m, 0, y, w, y + 1, argb);
+        finish(b);
+    }
+
     static int argb(int rgb, int alpha) { return (alpha << 24) | (rgb & 0xFFFFFF); }
 }

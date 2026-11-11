@@ -27,6 +27,8 @@ public class WheelConfig {
         public String presets = "0,25,50,75,100";
         /** frames mode: one entry per frame */
         public List<Frame> frames = null;
+        /** timed: seconds until the animation is switched back (0 = stays) */
+        public int duration = 0;
 
         public void ensureFrames() {
             if (frames == null) frames = new ArrayList<>();
@@ -101,7 +103,23 @@ public class WheelConfig {
     public String centerMode = "player";
     /** center size in percent (50-200) */
     public int centerSize = 100;
-    public int configVersion = 2;
+    public int configVersion = 3;
+    /** 1.4.0 look: design + accent theme */
+    public String design = "classic";
+    public String theme = "auto";
+    /** icon-only segments (no text) and their size in percent */
+    public boolean iconOnly = false;
+    public int iconSize = 100;
+    /** icon-only center (no text) and its icon size in percent */
+    public boolean centerIconOnly = false;
+    public int centerIconSize = 100;
+    /** inner ring with favorites + recently used */
+    public boolean innerRing = true;
+    public List<String> recents = new ArrayList<>();
+    public boolean sounds = true;
+    public int soundVolume = 50;
+    /** Alt+1..9 plays slot 1..9 of the last page without opening the wheel */
+    public boolean altHotkeys = true;
     public boolean frameSegments = true;
     public boolean hudEnabled = true;
     public String hudCorner = "top_left";
@@ -140,6 +158,8 @@ public class WheelConfig {
                         if (!c.livePreview) c.centerMode = "icon";
                         c.configVersion = 2;
                     }
+                    if (c.configVersion < 3) { c.design = "classic"; c.theme = "auto"; c.configVersion = 3; }
+                    c.fixup();
                     if (c.centerMode == null || c.centerMode.isBlank()) c.centerMode = "player";
                     if (c.hudCorner == null || c.hudCorner.isBlank()) c.hudCorner = "top_left";
                     if (c.hudScale <= 0) c.hudScale = 100;
@@ -149,6 +169,84 @@ public class WheelConfig {
             }
         } catch (Exception e) { CpmWheel.LOG.warn("[CPM Wheel] config load failed", e); }
         return autoFill();
+    }
+
+    void fixup() {
+        if (Style.idx(Style.DESIGNS, design) < 0) design = "classic";
+        if (Style.idx(Style.THEMES, theme) < 0) theme = "auto";
+        iconSize = clamp(iconSize <= 0 ? 100 : iconSize, 50, 250);
+        centerIconSize = clamp(centerIconSize <= 0 ? 100 : centerIconSize, 50, 250);
+        soundVolume = clamp(soundVolume, 0, 100);
+        if (recents == null) recents = new ArrayList<>();
+        recents.removeIf(r -> r == null || r.isBlank());
+        while (recents.size() > 8) recents.remove(recents.size() - 1);
+        for (Slot sl : allSlots()) if (sl.duration < 0) sl.duration = 0;
+    }
+    private static int clamp(int v, int a, int b) { return Math.max(a, Math.min(b, v)); }
+
+    public String profileKey() { return currentKey == null ? "default" : currentKey; }
+
+    public void addRecent(String anim) {
+        if (anim == null || anim.isBlank() || RESET.equals(anim)) return;
+        recents.remove(anim); recents.add(0, anim);
+        while (recents.size() > 8) recents.remove(recents.size() - 1);
+    }
+
+    /** favorites first, then recents (as slots), at most 8, computed on demand (not per frame) */
+    public List<Slot> ringSlots() {
+        List<Slot> out = new ArrayList<>();
+        List<Slot> all = allSlots();
+        for (Slot s : all) if (s.favorite && !s.empty() && !s.isFolder() && out.size() < 8 && !out.contains(s)) out.add(s);
+        for (String r : recents) {
+            if (out.size() >= 8) break;
+            Slot found = null;
+            for (Slot s : all) if (r.equals(s.anim) && !s.isFolder()) { found = s; break; }
+            if (found == null) found = new Slot(r);
+            boolean dup = false; for (Slot o : out) if (r.equals(o.anim)) dup = true;
+            if (!dup) out.add(found);
+        }
+        return out;
+    }
+
+    // ---------- layout presets (config/cpmwheel/presets/*.json) ----------
+    private static Path presetDir() { return dir().resolve("presets"); }
+    public static List<String> presetNames() {
+        List<String> l = new ArrayList<>();
+        try (var st = Files.list(presetDir())) {
+            st.forEach(f -> { String n = f.getFileName().toString(); if (n.endsWith(".json")) l.add(n.substring(0, n.length() - 5)); });
+        } catch (Exception ignored) {}
+        Collections.sort(l);
+        return l;
+    }
+    public boolean savePreset(String name) {
+        try {
+            name = name.replaceAll("[^A-Za-z0-9 ._-]", "_").trim();
+            if (name.isEmpty()) return false;
+            Files.createDirectories(presetDir());
+            Files.writeString(presetDir().resolve(name + ".json"), GSON.toJson(pages.toArray(new Page[0])), StandardCharsets.UTF_8);
+            return true;
+        } catch (Exception e) { CpmWheel.LOG.warn("[CPM Wheel] preset save failed", e); return false; }
+    }
+    public boolean loadPreset(String name) {
+        try {
+            Page[] p = GSON.fromJson(Files.readString(presetDir().resolve(name + ".json"), StandardCharsets.UTF_8), Page[].class);
+            if (p == null || p.length == 0) return false;
+            pages = new ArrayList<>(Arrays.asList(p));
+            for (Page pg : pages) if (pg.slots == null) pg.slots = new ArrayList<>();
+            lastPage = 0; fixup(); save();
+            return true;
+        } catch (Exception e) { CpmWheel.LOG.warn("[CPM Wheel] preset load failed", e); return false; }
+    }
+    /** copy pages from the default profile into this model's profile */
+    public boolean copyFromDefault() {
+        try {
+            Path f = file("default");
+            if (!Files.exists(f) || "default".equals(profileKey())) return false;
+            WheelConfig d = GSON.fromJson(Files.readString(f, StandardCharsets.UTF_8), WheelConfig.class);
+            if (d == null || d.pages == null || d.pages.isEmpty()) return false;
+            pages = d.pages; lastPage = 0; fixup(); save();
+            return true;
+        } catch (Exception e) { CpmWheel.LOG.warn("[CPM Wheel] copy failed", e); return false; }
     }
 
     /** First run: put every CPM animation on pages of 8, plus a reset slot. */

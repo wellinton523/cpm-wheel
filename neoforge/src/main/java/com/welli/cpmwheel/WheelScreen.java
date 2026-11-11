@@ -18,7 +18,11 @@ public class WheelScreen extends Screen {
     private List<WheelConfig.Page> pages;
     private int page;
     private int hovered = -1;
-    private int hoveredFrame = -1; // outer frame segment under the mouse (frames slots)
+    private int hoveredFrame = -1;
+    private int hoveredRing = -1, lastHovered = -1;
+    private List<WheelConfig.Slot> ring = new ArrayList<>();   // favorites + recents (inner ring)
+    private String query = "";
+    private List<WheelConfig.Slot> filtered = null;            // search results, null = no search // outer frame segment under the mouse (frames slots)
     private long openedAt, transitionAt, lastFrame;
     private int transitionDir = 0; // +1 entering sub-wheel, -1 leaving
     private final List<WheelConfig.Slot> path = new ArrayList<>(); // open folders
@@ -38,7 +42,8 @@ public class WheelScreen extends Screen {
         cfg = WheelConfig.get();
         pages = cfg.viewPages();
         page = Math.floorMod(cfg.lastPage, pages.size());
-        if (openedAt == 0) { openedAt = System.currentTimeMillis(); holdActive = openedByKey && cfg.holdToOpen; }
+        if (openedAt == 0) { openedAt = System.currentTimeMillis(); holdActive = openedByKey && cfg.holdToOpen; Actions.sound(cfg, 0.8f); }
+        ring = cfg.ringSlots();
         transitionAt = openedAt;
         addRenderableWidget(Button.builder(Component.translatable("cpmwheel.edit"), b -> { endPreview(true); minecraft.setScreen(new EditScreen(this)); })
                 .bounds(width - 84, height - 26, 78, 20).build());
@@ -48,13 +53,40 @@ public class WheelScreen extends Screen {
         }).bounds(width - 254, height - 26, 166, 20).build());
         addRenderableWidget(Button.builder(Component.translatable("cpmwheel.hud"), b -> { endPreview(true); minecraft.setScreen(new HudScreen(this)); })
                 .bounds(width - 304, height - 26, 46, 20).build());
+        addRenderableWidget(Button.builder(Component.translatable("cpmwheel.style"), b -> { endPreview(true); minecraft.setScreen(new SettingsScreen(this)); })
+                .bounds(width - 362, height - 26, 54, 20).build());
+    }
+
+    private boolean showRing() { return cfg.innerRing && filtered == null && path.isEmpty() && !ring.isEmpty(); }
+
+    private void refilter() {
+        endPreview(true);
+        hovered = -1; lastHovered = -1;
+        if (query.isEmpty()) { filtered = null; return; }
+        String q = query.toLowerCase();
+        List<WheelConfig.Slot> out = new ArrayList<>();
+        for (WheelConfig.Slot s : cfg.allSlots()) {
+            if (s.empty() || s.isFolder() || out.contains(s)) continue;
+            if (s.display().toLowerCase().contains(q) || s.anim.toLowerCase().contains(q)) out.add(s);
+            if (out.size() >= 12) break;
+        }
+        filtered = out;
+    }
+
+    /** play an inner-ring entry; toggles close the wheel, value slots keep it open */
+    private void playRing(WheelConfig.Slot s) {
+        endPreview(true);
+        Actions.trigger(cfg, s);
+        ring = cfg.ringSlots();
+        if (WheelConfig.RESET.equals(s.anim) || "toggle".equals(s.effectiveMode())) super.onClose();
+        else holdActive = false;
     }
 
     private float radius() { return Math.min(width, height) * 0.36f; }
 
     private WheelConfig.Page cur() { return pages.get(page); }
 
-    private List<WheelConfig.Slot> slots() { return path.isEmpty() ? cur().slots : path.get(path.size() - 1).children; }
+    private List<WheelConfig.Slot> slots() { return filtered != null ? filtered : path.isEmpty() ? cur().slots : path.get(path.size() - 1).children; }
 
     private void enter(WheelConfig.Slot folder) {
         endPreview(true);
@@ -81,6 +113,7 @@ public class WheelScreen extends Screen {
 
     /** Select hovered slot: folder -> enter (screen stays open), animation -> play and close. */
     private void activate() {
+        if (hoveredRing >= 0 && hoveredRing < ring.size() && showRing()) { playRing(ring.get(hoveredRing)); return; }
         List<WheelConfig.Slot> sl = slots();
         int h = hovered;
         if (h < 0 || h >= sl.size() || sl.get(h).empty()) { endPreview(true); onClose(); return; }
@@ -88,6 +121,7 @@ public class WheelScreen extends Screen {
         if (s.isFolder()) { enter(s); return; }
         if (isValue(s)) {
             endPreview(true);
+            cfg.addRecent(s.anim);
             if ("frames".equals(s.effectiveMode())) {
                 int k = hoveredFrame >= 0 ? hoveredFrame : (s.frameIndexOf(curVal(s)) + 1) % s.frames.size();
                 applyValue(s, s.frameValue(k));
@@ -107,8 +141,11 @@ public class WheelScreen extends Screen {
             return;
         }
         boolean alreadyApplied = s == previewSlot;
+        int prior = alreadyApplied ? previewPrev : (WheelConfig.RESET.equals(s.anim) ? -1 : CpmBridge.playing(s.anim));
         endPreview(false); // keep preview state if it is the chosen one
         if (!alreadyApplied) WheelConfig.run(s);
+        Actions.played(cfg, s, prior);
+        Actions.sound(cfg, 1.2f);
         previewSlot = null;
         super.onClose();
     }
@@ -128,6 +165,7 @@ public class WheelScreen extends Screen {
     private void applyValue(WheelConfig.Slot s, int v) {
         v = Math.max(s.minV(), Math.min(s.maxV(), v));
         CpmBridge.play(s.anim, v);
+        Actions.sound(cfg, 1.5f);
     }
 
     private void updatePreview(WheelConfig.Slot s) {
@@ -168,24 +206,35 @@ public class WheelScreen extends Screen {
         float trans = anim ? easeOutCubic((now - transitionAt) / (float) ANIM_MS) : 1f;
         float alpha = Math.min(open, trans);
 
-        g.fillGradient(0, 0, width, height, fade(0x90050A12, open), fade(0xB0050A12, open));
         float cx = width / 2f, cy = height / 2f, R0 = radius();
         float scale = 0.8f + 0.2f * open;
         if (transitionDir != 0 && trans < 1) scale *= transitionDir > 0 ? 0.85f + 0.15f * trans : 1.15f - 0.15f * trans;
         float R = R0 * scale, r0 = R * 0.38f;
+        Style.background(g, cfg, width, height, open, cx, cy, R);
+        int accent = Style.accent(cfg);
+        boolean ringOn = showRing();
+        int m = ring.size();
+        float ringR = r0 * 0.74f, ringIr = m == 0 ? 0 : (float) Math.min(r0 * 0.2f, ringR * Math.sin(Math.PI / Math.max(2, m)) * 0.9f);
         List<WheelConfig.Slot> slots = slots();
         int n = Math.max(1, slots.size());
         double seg = Math.PI * 2 / n;
         if (hoverAmt.length != slots.size()) hoverAmt = new float[slots.size()];
 
         double dx = mx - cx, dy = my - cy;
-        hovered = -1;
-        if (dx * dx + dy * dy > r0 * r0 * 0.6) {
+        hovered = -1; hoveredRing = -1;
+        if (ringOn) for (int i = 0; i < m; i++) {
+            double ra = i * Math.PI * 2 / m;
+            if (Math.hypot(mx - (cx + Math.sin(ra) * ringR), my - (cy - Math.cos(ra) * ringR)) <= ringIr + 1) hoveredRing = i;
+        }
+        if (hoveredRing < 0 && dx * dx + dy * dy > (ringOn ? r0 * r0 : r0 * r0 * 0.6)) {
             double ang = Math.atan2(dx, -dy);
             if (ang < 0) ang += Math.PI * 2;
             hovered = (int) Math.floor((ang + seg / 2) / seg) % n;
         }
         updatePreview(hovered >= 0 && hovered < slots.size() ? slots.get(hovered) : null);
+        int hoverId = hoveredRing >= 0 ? 100 + hoveredRing : hovered;
+        if (hoverId != lastHovered && hoverId >= 0 && open >= 1f) Actions.hoverSound(cfg);
+        lastHovered = hoverId;
         if (hovered < 0 || hovered >= slots.size() || !"frames".equals(slots.get(hovered).effectiveMode())) hoveredFrame = -1;
 
         for (int i = 0; i < slots.size(); i++) {
@@ -196,9 +245,7 @@ public class WheelScreen extends Screen {
             double a0 = i * seg - seg / 2 + 0.02, a1 = i * seg + seg / 2 - 0.02;
             boolean on = previewable(s) && CpmBridge.playing(s.anim) > 0;
             float ro = R + 7 * h;
-            Draw.sector(g, cx, cy, r0, ro, a0, a1, fade(h > 0.5f ? 0xC0102838 : 0xA00A1420, alpha));
-            Draw.sector(g, cx, cy, ro - 3, ro, a0, a1, Draw.argb(s.empty() ? 0x334455 : s.color, Math.round((170 + 85 * h) * alpha)));
-            if (on) Draw.sector(g, cx, cy, r0, r0 + 3, a0, a1, Draw.argb(s.color, Math.round(255 * alpha)));
+            Style.segment(g, cfg, cx, cy, r0, ro, a0, a1, s.color, h, on, s.empty(), alpha);
             if (isValue(s) && alpha > 0.5f && "frames".equals(s.effectiveMode()) && cfg.frameSegments) {
                 s.ensureFrames();
                 int nf = s.frames.size(), curK = s.frameIndexOf(curVal(s));
@@ -233,37 +280,66 @@ public class WheelScreen extends Screen {
             float rr = (r0 + ro) / 2;
             float tx = cx + (float) Math.sin(mid) * rr, ty = cy - (float) Math.cos(mid) * rr;
             if (alpha < 0.35f) continue;
-            int textY = (int) ty - 4;
-            if (Icons.has(s.icon)) { Icons.draw(g, s.icon, (int) tx, (int) ty - 6, 16); textY = (int) ty + 4; }
-            String label = s.empty() ? "—" : (s.isFolder() ? "\u25B8 " : "") + s.display();
-            label = font.plainSubstrByWidth(label, (int) (R * 0.75f));
-            g.drawCenteredString(font, label, (int) tx, textY, s.empty() ? 0x55667A : (hv ? 0xFFFFFF : 0xC8E8F0));
-            if (s.favorite) g.drawString(font, "\u2605", (int) tx + font.width(label) / 2 + 2, textY, 0xFFD23B);
+            int tcol = Style.textColor(cfg, hv && h > 0.5f, s.empty());
+            int isz = Math.max(8, Math.round(Math.min((ro - r0) * 0.95f, 18 * cfg.iconSize / 100f) * (1 + 0.08f * h)));
+            if (cfg.iconOnly) { // icon (or first-letter glyph), no text
+                if (s.empty()) Draw.sector(g, tx, ty, 0, 1.5f, 0, Math.PI * 2, Draw.argb(0x55667A, Math.round(200 * alpha)));
+                else Style.icon(g, cfg, font, s, (int) tx, (int) ty, isz, s.color, alpha);
+                if (s.favorite) g.drawString(font, "\u2605", (int) tx + isz / 2 - 2, (int) ty - isz / 2 - 4, 0xFFD23B, false);
+            } else {
+                int textY = (int) ty - 4;
+                if (Icons.has(s.icon)) { int is2 = Math.min(isz, (int) ((ro - r0) * 0.6f)); Icons.draw(g, s.icon, (int) tx, (int) ty - 2 - is2 / 2, is2); textY = (int) ty + is2 / 2 - 4; }
+                String label = s.empty() ? "\u2014" : (s.isFolder() ? "\u25B8 " : "") + s.display();
+                label = Style.fit(cfg, font, label, (int) (R * 0.75f));
+                Style.text(g, cfg, font, label, (int) tx, textY, tcol);
+                if (s.favorite) g.drawString(font, "\u2605", (int) tx + Style.textWidth(cfg, font, label) / 2 + 2, textY, 0xFFD23B);
+            }
+            int rem = s.empty() || s.isFolder() ? -1 : Actions.remaining(s.anim);
+            if (rem >= 0) g.drawCenteredString(font, "\u23F1" + rem + "s", (int) tx, (int) ty + Math.max(8, isz / 2 + 2), 0xFFD23B);
         }
 
-        Draw.sector(g, cx, cy, 0, r0 - 4, 0, Math.PI * 2, fade(0xD0060C14, alpha));
-        Draw.sector(g, cx, cy, r0 - 6, r0 - 4, 0, Math.PI * 2, fade(0xFF2EE6FF, alpha));
+        Style.center(g, cfg, cx, cy, r0 - 4, alpha);
         WheelConfig.Slot hs = hovered >= 0 && hovered < slots.size() ? slots.get(hovered) : null;
-        String center = hs != null && !hs.empty() ? hs.display() : (path.isEmpty() ? cur().name : path.get(path.size() - 1).display());
+        WheelConfig.Slot cs = hoveredRing >= 0 && hoveredRing < m ? ring.get(hoveredRing) : hs; // what the center shows
+        String center = cs != null && !cs.empty() ? cs.display() : filtered != null ? "\u2315 " + query : (path.isEmpty() ? cur().name : path.get(path.size() - 1).display());
+        if (ringOn && alpha > 0.35f) for (int i = 0; i < m; i++) { // favorites + recents inner ring
+            double ra = i * Math.PI * 2 / m;
+            float rx = cx + (float) Math.sin(ra) * ringR, ry = cy - (float) Math.cos(ra) * ringR;
+            boolean rh = i == hoveredRing;
+            WheelConfig.Slot rs = ring.get(i);
+            Draw.sector(g, rx, ry, 0, ringIr * (rh ? 1.15f : 1f), 0, Math.PI * 2, Draw.argb(rh ? accent : 0x000000, Math.round((rh ? 120 : 90) * alpha)));
+            Style.icon(g, cfg, font, rs, (int) rx, (int) ry, Math.max(6, (int) (ringIr * 1.5f)), rs.color, alpha);
+            if (rs.favorite) Draw.sector(g, rx + ringIr * 0.7f, ry - ringIr * 0.7f, 0, 1.6f, 0, Math.PI * 2, 0xFFFFD23B);
+        }
 
-        float k = cfg.centerSize / 100f;
+        float k = cfg.centerSize / 100f, rc = ringOn ? r0 * 0.5f : r0;
         String cm = cfg.centerMode == null ? "player" : cfg.centerMode;
+        boolean noText = cfg.centerIconOnly;
+        int cis = Math.max(8, Math.round(Math.min(rc * 1.5f, 28 * cfg.centerIconSize / 100f)));
         if (cm.equals("player") && minecraft.player != null && alpha > 0.5f) {
-            renderPlayer(g, cx, cy, r0 * k, mx, my);
-            if (hs != null && Icons.has(hs.icon)) { // small badge
-                Draw.sector(g, cx + r0 * 0.55f, cy - r0 * 0.55f, 0, 11, 0, Math.PI * 2, 0xE0060C14);
-                Icons.draw(g, hs.icon, (int) (cx + r0 * 0.55f), (int) (cy - r0 * 0.55f), 14);
+            renderPlayer(g, cx, cy, rc * k, mx, my);
+            if (cs != null && !cs.empty() && (noText || Icons.has(cs.icon))) { // small badge
+                int bs = Math.min(cis, (int) (r0 * 0.5f));
+                float bx = cx + r0 * 0.62f, by = cy - r0 * 0.62f;
+                Draw.sector(g, bx, by, 0, bs * 0.7f, 0, Math.PI * 2, 0xE0060C14);
+                Style.icon(g, cfg, font, cs, (int) bx, (int) by, bs, cs.color, alpha);
             }
-            g.drawCenteredString(font, font.plainSubstrByWidth(center, (int) (R * 2)), (int) cx, (int) (cy + R + 12), 0x2EE6FF);
-            if (!path.isEmpty()) g.drawCenteredString(font, Component.translatable("cpmwheel.back"), (int) cx, (int) (cy + R + 24), 0x7FA8B8);
+            if (!noText) {
+                Style.text(g, cfg, font, Style.fit(cfg, font, center, (int) (R * 2)), (int) cx, (int) (cy + R + 12), accent);
+                if (!path.isEmpty()) g.drawCenteredString(font, Component.translatable("cpmwheel.back"), (int) cx, (int) (cy + R + 24), 0x7FA8B8);
+            }
+        } else if (noText) {
+            if (cm.equals("icon") && cs != null && !cs.empty()) Style.icon(g, cfg, font, cs, (int) cx, (int) cy, cis, cs.color, alpha);
         } else {
-            WheelConfig.Slot is = hs != null && Icons.has(hs.icon) ? hs : null;
-            if (cm.equals("icon") && is != null) {
-                int isz = Math.max(8, (int) (Math.min(40, r0 * 0.9f) * k));
-                Icons.draw(g, is.icon, (int) cx, (int) cy - 12 - isz / 2, isz);
-            }
-            g.drawCenteredString(font, font.plainSubstrByWidth(center, (int) (r0 * 1.7f)), (int) cx, (int) cy - 8 + (cm.equals("icon") && is != null ? 0 : 4), 0x2EE6FF);
-            g.drawCenteredString(font, path.isEmpty() ? (page + 1) + "/" + pages.size() : "\u2190", (int) cx, (int) cy + 8, 0x7FA8B8);
+            WheelConfig.Slot is = cs != null && Icons.has(cs.icon) ? cs : null;
+            boolean showIcon = cm.equals("icon") && is != null;
+            if (showIcon) Icons.draw(g, is.icon, (int) cx, (int) cy - 10 - cis / 2, (int) (cis * k));
+            Style.text(g, cfg, font, Style.fit(cfg, font, center, (int) (rc * 1.7f)), (int) cx, (int) cy - 8 + (showIcon ? 0 : 4), accent);
+            if (!ringOn || !showIcon) g.drawCenteredString(font, path.isEmpty() ? (page + 1) + "/" + pages.size() : "\u2190", (int) cx, (int) cy + 8, 0x7FA8B8);
+        }
+        if (filtered != null) {
+            g.drawString(font, Component.translatable("cpmwheel.search", query), 8, 40, accent);
+            if (filtered.isEmpty()) g.drawCenteredString(font, Component.translatable("cpmwheel.search.none"), (int) cx, (int) (cy + R + 12), 0xFF3B5C);
         }
 
         if (hs != null && isValue(hs) && "frames".equals(hs.effectiveMode())) {
@@ -292,7 +368,7 @@ public class WheelScreen extends Screen {
         for (int i = 0; i < pages.size(); i++) {
             String nm = pages.get(i).name;
             int w = font.width(nm) + 10;
-            g.fill(tx, 8, tx + w, 22, i == page ? 0xE02EE6FF : 0xA0101C28);
+            g.fill(tx, 8, tx + w, 22, i == page ? Draw.argb(accent, 0xE0) : 0xA0101C28);
             g.drawString(font, nm, tx + 5, 11, i == page ? 0x041018 : 0xC8E8F0, false);
             tx += w + 3;
         }
@@ -324,6 +400,7 @@ public class WheelScreen extends Screen {
         }
         holdActive = false; // once the mouse is used, stop closing on key release
         float r0 = radius() * 0.38f;
+        if (hoveredRing >= 0 && hoveredRing < ring.size() && showRing()) { if (btn == 0) playRing(ring.get(hoveredRing)); else { ring.get(hoveredRing).favorite = !ring.get(hoveredRing).favorite; cfg.save(); ring = cfg.ringSlots(); } return true; }
         boolean inCenter = Math.hypot(mx - width / 2f, my - height / 2f) < r0 * 0.78f;
         if (inCenter) { if (!back() && btn == 0) onClose(); return true; }
         if (btn == 0 && hovered >= 0) { activate(); return true; }
@@ -331,7 +408,7 @@ public class WheelScreen extends Screen {
             List<WheelConfig.Slot> sl = slots();
             if (hovered >= 0 && hovered < sl.size() && !sl.get(hovered).empty()) {
                 WheelConfig.Slot s = sl.get(hovered);
-                s.favorite = !s.favorite; cfg.save();
+                s.favorite = !s.favorite; cfg.save(); ring = cfg.ringSlots();
                 if (path.isEmpty()) { pages = cfg.viewPages(); page = Math.min(page, pages.size() - 1); }
                 return true;
             }
@@ -344,6 +421,7 @@ public class WheelScreen extends Screen {
     private void setPage(int p) {
         endPreview(true);
         path.clear();
+        query = ""; filtered = null;
         page = Math.floorMod(p, pages.size());
         cfg.lastPage = page; cfg.save();
         transitionDir = 0; transitionAt = System.currentTimeMillis();
@@ -368,6 +446,11 @@ public class WheelScreen extends Screen {
 
     @Override
     public boolean keyPressed(int key, int sc, int mod) {
+        if (!query.isEmpty() && (key == InputConstants.KEY_ESCAPE || key == InputConstants.KEY_BACKSPACE)) {
+            query = key == InputConstants.KEY_ESCAPE ? "" : query.substring(0, query.length() - 1);
+            refilter();
+            return true;
+        }
         if (key == InputConstants.KEY_ESCAPE || key == InputConstants.KEY_BACKSPACE) {
             if (back()) return true;
             if (key == InputConstants.KEY_BACKSPACE) return true;
@@ -378,12 +461,26 @@ public class WheelScreen extends Screen {
             return true;
         }
         if (key == InputConstants.KEY_TAB) { setPage(page + (hasShiftDown() ? -1 : 1)); return true; }
-        if (!holdActive && !cfg.holdToOpen && CpmWheel.KEY_WHEEL.matches(key, sc) && System.currentTimeMillis() - openedAt > 150) { onClose(); return true; }
+        if (filtered == null && !holdActive && !cfg.holdToOpen && CpmWheel.KEY_WHEEL.matches(key, sc) && System.currentTimeMillis() - openedAt > 150) { onClose(); return true; }
         return super.keyPressed(key, sc, mod);
     }
 
     @Override
     public void renderBackground(GuiGraphics g, int mx, int my, float pt) {}
+
+    /** typing letters filters every slot of every page */
+    @Override
+    public boolean charTyped(char c, int mod) {
+        if (!Character.isLetter(c) && !(c == ' ' && !query.isEmpty())) return super.charTyped(c, mod);
+        InputConstants.Key k = CpmWheel.KEY_WHEEL.getKey();
+        if (query.isEmpty() && k.getType() == InputConstants.Type.KEYSYM && InputConstants.isKeyDown(minecraft.getWindow().getWindow(), k.getValue()))
+            return true; // key repeat of the (held) wheel key, not typing
+        if (query.length() >= 24) return true;
+        holdActive = false;
+        query += c;
+        refilter();
+        return true;
+    }
 
     @Override
     public boolean isPauseScreen() { return false; }

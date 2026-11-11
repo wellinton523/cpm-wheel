@@ -52,6 +52,7 @@ public class CpmWheel {
 
     private void tick(ClientTickEvent.Post e) {
         Minecraft mc = Minecraft.getInstance();
+        Actions.tick(mc);
         while (KEY_WHEEL.consumeClick()) {
             if (mc.screen == null && mc.player != null) mc.setScreen(new WheelScreen(true));
         }

@@ -149,6 +149,13 @@ public class EditScreen extends Screen {
                         pr.setResponder(v -> s.presets = v); addRenderableWidget(pr);
                         valueLabels = y;
                     }
+                } else if (!WheelConfig.RESET.equals(s.anim)) { // timed animation
+                    EditBox du = new EditBox(font, px, y + 2, 160, 16, Component.literal(""));
+                    du.setValue(s.duration <= 0 ? "" : Integer.toString(s.duration));
+                    du.setHint(Component.translatable("cpmwheel.edit.duration"));
+                    du.setFilter(v -> v.matches("\\d{0,4}"));
+                    du.setResponder(v -> s.duration = v.isEmpty() ? 0 : Integer.parseInt(v));
+                    addRenderableWidget(du);
                 }
             }
         }
