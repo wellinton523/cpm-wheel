@@ -44,7 +44,7 @@ public class WheelScreen extends Screen {
         addRenderableWidget(Button.builder(Component.translatable(cfg.previewOnHover ? "cpmwheel.preview.on" : "cpmwheel.preview.off"), b -> {
             cfg.previewOnHover = !cfg.previewOnHover; if (!cfg.previewOnHover) endPreview(true); cfg.save();
             b.setMessage(Component.translatable(cfg.previewOnHover ? "cpmwheel.preview.on" : "cpmwheel.preview.off"));
-        }).bounds(width - 214, height - 26, 126, 20).build());
+        }).bounds(width - 254, height - 26, 166, 20).build());
     }
 
     private float radius() { return Math.min(width, height) * 0.36f; }
@@ -213,8 +213,10 @@ public class WheelScreen extends Screen {
         WheelConfig.Slot hs = hovered >= 0 && hovered < slots.size() ? slots.get(hovered) : null;
         String center = hs != null && !hs.empty() ? hs.display() : (path.isEmpty() ? cur().name : path.get(path.size() - 1).display());
 
-        if (cfg.livePreview && minecraft.player != null && alpha > 0.5f) {
-            renderPlayer(g, cx, cy, r0, mx, my);
+        float k = cfg.centerSize / 100f;
+        String cm = cfg.centerMode == null ? "player" : cfg.centerMode;
+        if (cm.equals("player") && minecraft.player != null && alpha > 0.5f) {
+            renderPlayer(g, cx, cy, r0 * k, mx, my);
             if (hs != null && Icons.has(hs.icon)) { // small badge
                 Draw.sector(g, cx + r0 * 0.55f, cy - r0 * 0.55f, 0, 11, 0, Math.PI * 2, 0xE0060C14);
                 Icons.draw(g, hs.icon, (int) (cx + r0 * 0.55f), (int) (cy - r0 * 0.55f), 14);
@@ -222,12 +224,13 @@ public class WheelScreen extends Screen {
             g.drawCenteredString(font, font.plainSubstrByWidth(center, (int) (R * 2)), (int) cx, (int) (cy + R + 12), 0x2EE6FF);
             if (!path.isEmpty()) g.drawCenteredString(font, Component.translatable("cpmwheel.back"), (int) cx, (int) (cy + R + 24), 0x7FA8B8);
         } else {
-            if (hs != null && Icons.has(hs.icon)) {
-                int isz = (int) Math.min(40, r0 * 0.9f);
-                Icons.draw(g, hs.icon, (int) cx, (int) cy - 12 - isz / 2, isz);
+            WheelConfig.Slot is = hs != null && Icons.has(hs.icon) ? hs : null;
+            if (cm.equals("icon") && is != null) {
+                int isz = Math.max(8, (int) (Math.min(40, r0 * 0.9f) * k));
+                Icons.draw(g, is.icon, (int) cx, (int) cy - 12 - isz / 2, isz);
             }
-            g.drawCenteredString(font, font.plainSubstrByWidth(center, (int) (r0 * 1.7f)), (int) cx, (int) cy - 8, 0x2EE6FF);
-            g.drawCenteredString(font, path.isEmpty() ? (page + 1) + "/" + pages.size() : "\u2190", (int) cx, (int) cy + 4, 0x7FA8B8);
+            g.drawCenteredString(font, font.plainSubstrByWidth(center, (int) (r0 * 1.7f)), (int) cx, (int) cy - 8 + (cm.equals("icon") && is != null ? 0 : 4), 0x2EE6FF);
+            g.drawCenteredString(font, path.isEmpty() ? (page + 1) + "/" + pages.size() : "\u2190", (int) cx, (int) cy + 8, 0x7FA8B8);
         }
 
         if (hs != null && isValue(hs)) {

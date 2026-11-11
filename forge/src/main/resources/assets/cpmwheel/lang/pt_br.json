@@ -27,7 +27,7 @@
   "cpmwheel.icons.reload": "Recarregar",
   "cpmwheel.icons.none": "Sem ícone",
   "cpmwheel.icons.folder": "%s PNG(s) personalizados em config/cpmwheel/icons",
-  "cpmwheel.preview.on": "Prévia ao passar o mouse: ON",
+  "cpmwheel.preview.on": "Prévia (muda seu modelo!): ON",
   "cpmwheel.preview.off": "Prévia ao passar o mouse: OFF",
   "cpmwheel.back": "Botão direito / Esc / centro: voltar",
   "cpmwheel.value.hint.slider": "Scroll: ajustar (Shift = rápido) • Clique: confirmar",
@@ -42,5 +42,9 @@
   "cpmwheel.edit.minmaxstep": "Mín / Máx / Passo",
   "cpmwheel.edit.presets": "Presets (% separados por vírgula)",
   "cpmwheel.edit.animations": "Animações: %s",
-  "cpmwheel.edit.livepreview": "Jogador no centro: %s"
+  "cpmwheel.edit.center": "Centro: %s",
+  "cpmwheel.center.player": "Jogador",
+  "cpmwheel.center.icon": "Somente ícone",
+  "cpmwheel.center.none": "Nada",
+  "cpmwheel.edit.centersize": "Tamanho do centro: %s%%"
 }

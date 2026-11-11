@@ -59,7 +59,13 @@ public class WheelConfig {
     public boolean holdToOpen = true;
     public boolean animations = true;
     public boolean livePreview = true;
-    public boolean previewOnHover = true;
+    /** Hover preview really plays the animation on your model (CPM has no local-only preview). Off by default. */
+    public boolean previewOnHover = false;
+    /** center of the wheel: "player", "icon" or "none" */
+    public String centerMode = "player";
+    /** center size in percent (50-200) */
+    public int centerSize = 100;
+    public int configVersion = 2;
     public boolean showFavoritesPage = true;
     public int lastPage = 0;
     public List<Page> pages = new ArrayList<>();
@@ -86,7 +92,16 @@ public class WheelConfig {
             if (!Files.exists(f) && !key.equals("default")) f = file("default");
             if (Files.exists(f)) {
                 WheelConfig c = GSON.fromJson(Files.readString(f, StandardCharsets.UTF_8), WheelConfig.class);
-                if (c != null && c.pages != null && !c.pages.isEmpty()) return c;
+                if (c != null && c.pages != null && !c.pages.isEmpty()) {
+                    if (c.configVersion < 2) { // 1.2.0 had hover preview on by default and it changed the real model
+                        c.previewOnHover = false;
+                        if (!c.livePreview) c.centerMode = "icon";
+                        c.configVersion = 2;
+                    }
+                    if (c.centerMode == null || c.centerMode.isBlank()) c.centerMode = "player";
+                    c.centerSize = Math.max(50, Math.min(200, c.centerSize <= 0 ? 100 : c.centerSize));
+                    return c;
+                }
             }
         } catch (Exception e) { CpmWheel.LOG.warn("[CPM Wheel] config load failed", e); }
         return autoFill();

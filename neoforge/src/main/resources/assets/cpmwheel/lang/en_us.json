@@ -27,7 +27,7 @@
   "cpmwheel.icons.reload": "Reload",
   "cpmwheel.icons.none": "No icon",
   "cpmwheel.icons.folder": "%s custom PNG(s) in config/cpmwheel/icons",
-  "cpmwheel.preview.on": "Hover preview: ON",
+  "cpmwheel.preview.on": "Hover preview (changes your model!): ON",
   "cpmwheel.preview.off": "Hover preview: OFF",
   "cpmwheel.back": "Right click / Esc / center: back",
   "cpmwheel.value.hint.slider": "Scroll: adjust (Shift = faster) • Click: confirm",
@@ -42,5 +42,9 @@
   "cpmwheel.edit.minmaxstep": "Min / Max / Step",
   "cpmwheel.edit.presets": "Presets (% list)",
   "cpmwheel.edit.animations": "Animations: %s",
-  "cpmwheel.edit.livepreview": "Player in center: %s"
+  "cpmwheel.edit.center": "Center: %s",
+  "cpmwheel.center.player": "Player",
+  "cpmwheel.center.icon": "Icon only",
+  "cpmwheel.center.none": "Nothing",
+  "cpmwheel.edit.centersize": "Center size: %s%%"
 }

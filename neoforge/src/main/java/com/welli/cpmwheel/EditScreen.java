@@ -28,7 +28,7 @@ public class EditScreen extends Screen {
 
     private final List<WheelConfig.Slot> path = new ArrayList<>();
     private WheelConfig.Page cur() { return cfg.pages.get(page); }
-    private List<WheelConfig.Slot> slots() { return path.isEmpty() ? slots() : path.get(path.size() - 1).children; }
+    private List<WheelConfig.Slot> slots() { return path.isEmpty() ? cur().slots : path.get(path.size() - 1).children; }
     private WheelConfig.Slot sel() { return selected >= 0 && selected < slots().size() ? slots().get(selected) : null; }
 
     @Override
@@ -71,9 +71,16 @@ public class EditScreen extends Screen {
                 path.remove(path.size() - 1); selected = -1; rebuildWidgets(); }).bounds(LIST_W + 16, 22, 70, 18).build());
         }
         addRenderableWidget(Button.builder(Component.translatable("cpmwheel.edit.animations", onoff(cfg.animations)), b -> {
-            cfg.animations = !cfg.animations; rebuildWidgets(); }).bounds(px, height - 114, 160, 18).build());
-        addRenderableWidget(Button.builder(Component.translatable("cpmwheel.edit.livepreview", onoff(cfg.livePreview)), b -> {
-            cfg.livePreview = !cfg.livePreview; rebuildWidgets(); }).bounds(px, height - 92, 160, 18).build());
+            cfg.animations = !cfg.animations; rebuildWidgets(); }).bounds(px, height - 158, 160, 18).build());
+        addRenderableWidget(Button.builder(Component.translatable("cpmwheel.edit.center", Component.translatable("cpmwheel.center." + cfg.centerMode)), b -> {
+            String[] o = {"player", "icon", "none"};
+            int i = java.util.Arrays.asList(o).indexOf(cfg.centerMode);
+            cfg.centerMode = o[(i + 1) % o.length]; rebuildWidgets(); }).bounds(px, height - 92, 160, 18).build());
+        addRenderableWidget(new net.minecraft.client.gui.components.AbstractSliderButton(px, height - 136, 160, 18,
+                Component.translatable("cpmwheel.edit.centersize", cfg.centerSize), (cfg.centerSize - 50) / 150.0) {
+            @Override protected void updateMessage() { setMessage(Component.translatable("cpmwheel.edit.centersize", cfg.centerSize)); }
+            @Override protected void applyValue() { cfg.centerSize = 50 + (int) Math.round(value * 150 / 5) * 5; }
+        });
         addRenderableWidget(Button.builder(Component.literal("+ slot"), b -> { if (slots().size() < 12) slots().add(new WheelConfig.Slot()); })
                 .bounds(px, y, 78, 18).build());
         addRenderableWidget(Button.builder(Component.literal("- slot"), b -> {
