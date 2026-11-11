@@ -111,5 +111,11 @@
   "cpmwheel.display.default": "Default (global)",
   "cpmwheel.display.icon": "Icon",
   "cpmwheel.display.text": "Text",
-  "cpmwheel.display.both": "Icon + text"
+  "cpmwheel.display.both": "Icon + text",
+  "cpmwheel.edit.mode.group": "Type: group",
+  "cpmwheel.edit.group": "Pick group animations (%s)…",
+  "cpmwheel.group.title": "Group: %s",
+  "cpmwheel.group.search": "search animations...",
+  "cpmwheel.group.help": "Click to tick/untick. In the wheel the group turns all ticked animations ON together, or OFF if they are all on.",
+  "cpmwheel.group.selected": "%s selected"
 }

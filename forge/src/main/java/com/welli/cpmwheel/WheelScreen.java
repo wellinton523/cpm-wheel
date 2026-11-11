@@ -152,7 +152,7 @@ public class WheelScreen extends Screen {
 
     // ---------- live preview ----------
     private static boolean previewable(WheelConfig.Slot s) {
-        return s != null && !s.empty() && !s.isFolder() && !WheelConfig.RESET.equals(s.anim);
+        return s != null && !s.empty() && !s.isFolder() && !s.isGroup() && !WheelConfig.RESET.equals(s.anim);
     }
 
     private static boolean isValue(WheelConfig.Slot s) { return previewable(s) && !"toggle".equals(s.effectiveMode()); }
@@ -243,7 +243,8 @@ public class WheelScreen extends Screen {
             hoverAmt[i] = anim ? hoverAmt[i] + ((hv ? 1f : 0f) - hoverAmt[i]) * Math.min(1f, dt * 18f) : (hv ? 1f : 0f);
             float h = hoverAmt[i];
             double a0 = i * seg - seg / 2 + 0.02, a1 = i * seg + seg / 2 - 0.02;
-            boolean on = previewable(s) && CpmBridge.playing(s.anim) > 0;
+            int gst = s.isGroup() ? s.groupState() : 0;
+            boolean on = s.isGroup() ? gst == 2 : previewable(s) && CpmBridge.playing(s.anim) > 0;
             float ro = R + 7 * h;
             Style.segment(g, cfg, cx, cy, r0, ro, a0, a1, s.color, h, on, s.empty(), alpha);
             if (isValue(s) && alpha > 0.5f && "frames".equals(s.effectiveMode()) && cfg.frameSegments) {
@@ -294,7 +295,11 @@ public class WheelScreen extends Screen {
                 Style.text(g, cfg, font, label, (int) tx, textY, tcol);
                 if (s.favorite) g.drawString(font, "\u2605", (int) tx + Style.textWidth(cfg, font, label) / 2 + 2, textY, 0xFFD23B);
             }
-            int rem = s.empty() || s.isFolder() ? -1 : Actions.remaining(s.anim);
+            if (s.isGroup()) { // ON / OFF / partial
+                int iy = (int) ty + Math.max(8, isz / 2 + 2) + (s.iconOnly(cfg) ? 0 : 4);
+                g.drawCenteredString(font, gst == 2 ? "ON" : gst == 1 ? "\u25D0" : "OFF", (int) tx, iy, gst == 2 ? 0x3BFF9D : gst == 1 ? 0xFFD23B : 0x7FA8B8);
+            }
+            int rem = s.empty() || s.isFolder() || s.isGroup() ? -1 : Actions.remaining(s.anim);
             if (rem >= 0) g.drawCenteredString(font, "\u23F1" + rem + "s", (int) tx, (int) ty + Math.max(8, isz / 2 + 2), 0xFFD23B);
         }
 

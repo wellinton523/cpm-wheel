@@ -111,5 +111,11 @@
   "cpmwheel.display.default": "Padrão (global)",
   "cpmwheel.display.icon": "Ícone",
   "cpmwheel.display.text": "Texto",
-  "cpmwheel.display.both": "Ícone + texto"
+  "cpmwheel.display.both": "Ícone + texto",
+  "cpmwheel.edit.mode.group": "Tipo: grupo",
+  "cpmwheel.edit.group": "Escolher animações (%s)…",
+  "cpmwheel.group.title": "Grupo: %s",
+  "cpmwheel.group.search": "buscar animações...",
+  "cpmwheel.group.help": "Clique para marcar/desmarcar. Na roda o grupo liga todas as marcadas juntas, ou desliga se todas estiverem ligadas.",
+  "cpmwheel.group.selected": "%s marcadas"
 }

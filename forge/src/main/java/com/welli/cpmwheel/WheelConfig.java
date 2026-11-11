@@ -31,6 +31,21 @@ public class WheelConfig {
         public int duration = 0;
         /** how this button is drawn: "" = follow global icons-only, "icon", "text", "both" */
         public String displayMode = "";
+        /** group slot ("Grupo"): toggle animations switched on/off together */
+        public List<String> members = null;
+        public boolean isGroup() { return "group".equals(mode); }
+        /** non-blank members (never null) */
+        public List<String> memberList() {
+            List<String> l = new ArrayList<>();
+            if (members != null) for (String a : members) if (a != null && !a.isBlank() && !l.contains(a)) l.add(a);
+            return l;
+        }
+        /** 0 = all off/unknown, 1 = mixed, 2 = all on (members with unknown state are ignored) */
+        public int groupState() {
+            int on = 0, known = 0;
+            for (String a : memberList()) { int v = CpmBridge.playing(a); if (v < 0) continue; known++; if (v > 0) on++; }
+            return known == 0 || on == 0 ? 0 : on == known ? 2 : 1;
+        }
         public static final String[] DISPLAY_MODES = {"", "icon", "text", "both"};
         /** resolved: true = draw icon/glyph only */
         public boolean iconOnly(WheelConfig c) { String m = displayMode == null ? "" : displayMode; return m.equals("icon") || (m.isEmpty() && c.iconOnly); }
@@ -82,8 +97,8 @@ public class WheelConfig {
         }
         public Slot() {}
         public Slot(String a) { anim = a; }
-        public String display() { return label != null && !label.isBlank() ? label : (isFolder() ? "..." : RESET.equals(anim) ? "Reset" : anim); }
-        public boolean empty() { return !isFolder() && (anim == null || anim.isBlank()); }
+        public String display() { return label != null && !label.isBlank() ? label : (isFolder() ? "..." : isGroup() ? "Grupo" : RESET.equals(anim) ? "Reset" : anim); }
+        public boolean empty() { return !isFolder() && !isGroup() && (anim == null || anim.isBlank()); }
     }
 
     public static class Frame {
@@ -112,7 +127,7 @@ public class WheelConfig {
     public String centerMode = "player";
     /** center size in percent (50-200) */
     public int centerSize = 100;
-    public int configVersion = 7;
+    public int configVersion = 8;
     private static final String LEGACY_DESIGN = "signalis";
     /** HUD grouped by wheel/folder with nested bars; false = flat list */
     public boolean hudGrouped = true;
@@ -181,7 +196,7 @@ public class WheelConfig {
                         c.configVersion = 4;
                     }
                     if (c.configVersion < 7) c.innerRing = false; // 1.4.4: center ring off once on upgrade
-                    if (c.configVersion < 7) c.configVersion = 7;
+                    if (c.configVersion < 8) c.configVersion = 8; // 1.4.5: group slots (new fields, default none)
                     if (c.configVersion < 6) c.configVersion = 6; // 1.4.2: design id rename + per-slot displayMode (defaults to "") handled in fixup()
                     c.fixup();
                     if (c.centerMode == null || c.centerMode.isBlank()) c.centerMode = "player";
@@ -223,6 +238,7 @@ public class WheelConfig {
         while (recents.size() > 8) recents.remove(recents.size() - 1);
         for (Slot sl : allSlots()) {
             if (sl.duration < 0) sl.duration = 0;
+            if (sl.members != null) sl.members.removeIf(a -> a == null || a.isBlank());
             if (sl.displayMode == null || !Arrays.asList(Slot.DISPLAY_MODES).contains(sl.displayMode)) sl.displayMode = "";
         }
     }
@@ -347,8 +363,19 @@ public class WheelConfig {
         }
     }
 
+    /** all on -> all off, otherwise (off or mixed) -> all on. Missing animations are skipped. */
+    public static void toggleGroup(Slot s) {
+        List<String> l = s.memberList();
+        if (l.isEmpty()) return;
+        int target = s.groupState() == 2 ? 0 : 1;
+        java.util.Set<String> known = CpmBridge.listAnimations().keySet();
+        for (String a : l) if (known.isEmpty() || known.contains(a)) CpmBridge.play(a, target);
+        Hud.invalidate();
+    }
+
     public static void run(Slot s) {
         if (s == null || s.empty() || s.isFolder()) return;
+        if (s.isGroup()) { toggleGroup(s); return; }
         if (RESET.equals(s.anim)) CpmBridge.resetAll();
         else CpmBridge.play(s.anim, s.value);
     }

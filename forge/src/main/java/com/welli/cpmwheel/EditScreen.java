@@ -141,12 +141,16 @@ public class EditScreen extends Screen {
                 Component mc = m.isEmpty() ? Component.translatable("cpmwheel.edit.mode.auto", s.effectiveMode())
                         : Component.translatable(m.equals("toggle") ? "cpmwheel.edit.mode.toggle_s" : "cpmwheel.edit.mode." + m);
                 addRenderableWidget(Button.builder(mc, b -> {
-                    String[] order = {"", "toggle", "slider", "presets", "frames"};
+                    String[] order = {"", "toggle", "slider", "presets", "frames", "group"};
                     int i = java.util.Arrays.asList(order).indexOf(s.mode == null ? "" : s.mode);
                     s.mode = order[(i + 1) % order.length]; rebuildWidgets();
                 }).bounds(px, y, 160, 18).build());
                 y += 20;
-                if (!"toggle".equals(s.effectiveMode()) && !WheelConfig.RESET.equals(s.anim)) {
+                if (s.isGroup()) {
+                    if (s.members == null) { s.members = new ArrayList<>(); if (s.anim != null && !s.anim.isBlank() && !WheelConfig.RESET.equals(s.anim)) s.members.add(s.anim); }
+                    addRenderableWidget(Button.builder(Component.translatable("cpmwheel.edit.group", s.memberList().size()),
+                            b -> minecraft.setScreen(new GroupScreen(this, s))).bounds(px, y + 9, 160, 18).build());
+                } else if (!"toggle".equals(s.effectiveMode()) && !WheelConfig.RESET.equals(s.anim)) {
                     EditBox mn = num(px, y + 10, s.min <= 0 ? "" : "" + s.min, "0", v -> s.min = v);
                     EditBox mxb = num(px + 54, y + 10, s.max <= 0 ? "" : "" + s.max, "" + s.maxV(), v -> s.max = v);
                     EditBox st = num(px + 108, y + 10, s.step <= 0 ? "" : "" + s.step, "" + s.stepV(), v -> s.step = v);

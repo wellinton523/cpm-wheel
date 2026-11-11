@@ -41,6 +41,7 @@ public final class Actions {
     public static void trigger(WheelConfig cfg, WheelConfig.Slot s) {
         if (s == null || s.empty() || s.isFolder()) return;
         int prior = WheelConfig.RESET.equals(s.anim) ? -1 : CpmBridge.playing(s.anim);
+        if (s.isGroup()) { WheelConfig.run(s); sound(cfg, 1.2f); return; }
         String m = WheelConfig.RESET.equals(s.anim) ? "toggle" : s.effectiveMode();
         int cur = prior < 0 ? s.minV() : prior;
         switch (m) {
