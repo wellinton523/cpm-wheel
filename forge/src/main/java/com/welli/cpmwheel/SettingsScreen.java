@@ -120,7 +120,7 @@ public class SettingsScreen extends Screen {
         Style.center(g, cfg, cx, cy, r0 - 4, 1f);
         WheelConfig.Slot hs = hv < slots.size() ? slots.get(hv) : null;
         int cis = Math.max(8, Math.round(Math.min(r0 * 1.5f, 28 * cfg.centerIconSize / 100f)));
-        if (cfg.centerIconOnly) { if (hs != null && !hs.empty()) Style.icon(g, cfg, font, hs, (int) cx, (int) cy, cis, hs.color, 1f); }
+        if (cfg.centerIconOnly) { if (hs != null && Icons.has(hs.icon)) Icons.draw(g, hs.icon, (int) cx, (int) cy, cis); }
         else if (hs != null) Style.text(g, cfg, font, Style.fit(cfg, font, hs.empty() ? "-" : hs.display(), (int) (r0 * 1.7f)), (int) cx, (int) cy - 4, Style.accent(cfg));
     }
 

@@ -308,7 +308,8 @@ public class WheelScreen extends Screen {
             boolean rh = i == hoveredRing;
             WheelConfig.Slot rs = ring.get(i);
             Draw.sector(g, rx, ry, 0, ringIr * (rh ? 1.15f : 1f), 0, Math.PI * 2, Draw.argb(rh ? accent : 0x000000, Math.round((rh ? 120 : 90) * alpha)));
-            Style.icon(g, cfg, font, rs, (int) rx, (int) ry, Math.max(6, (int) (ringIr * 1.5f)), rs.color, alpha);
+            if (Icons.has(rs.icon)) Icons.draw(g, rs.icon, (int) rx, (int) ry, Math.max(6, (int) (ringIr * 1.5f)));
+            else Draw.sector(g, rx, ry, 0, ringIr * 0.35f, 0, Math.PI * 2, Draw.argb(rs.color, Math.round(230 * alpha))); // no letter glyph inside the center
             if (rs.favorite) Draw.sector(g, rx + ringIr * 0.7f, ry - ringIr * 0.7f, 0, 1.6f, 0, Math.PI * 2, 0xFFFFD23B);
         }
 
@@ -318,18 +319,18 @@ public class WheelScreen extends Screen {
         int cis = Math.max(8, Math.round(Math.min(rc * 1.5f, 28 * cfg.centerIconSize / 100f)));
         if (cm.equals("player") && minecraft.player != null && alpha > 0.5f) {
             renderPlayer(g, cx, cy, rc * k, mx, my);
-            if (cs != null && !cs.empty() && (noText || Icons.has(cs.icon))) { // small badge
+            if (cs != null && !cs.empty() && Icons.has(cs.icon)) { // small badge, real icons only (never a letter glyph)
                 int bs = Math.min(cis, (int) (r0 * 0.5f));
                 float bx = cx + r0 * 0.62f, by = cy - r0 * 0.62f;
                 Draw.sector(g, bx, by, 0, bs * 0.7f, 0, Math.PI * 2, 0xE0060C14);
-                Style.icon(g, cfg, font, cs, (int) bx, (int) by, bs, cs.color, alpha);
+                Icons.draw(g, cs.icon, (int) bx, (int) by, bs);
             }
             if (!noText) {
                 Style.text(g, cfg, font, Style.fit(cfg, font, center, (int) (R * 2)), (int) cx, (int) (cy + R + 12), accent);
                 if (!path.isEmpty()) g.drawCenteredString(font, Component.translatable("cpmwheel.back"), (int) cx, (int) (cy + R + 24), 0x7FA8B8);
             }
         } else if (noText) {
-            if (cm.equals("icon") && cs != null && !cs.empty()) Style.icon(g, cfg, font, cs, (int) cx, (int) cy, cis, cs.color, alpha);
+            if (cm.equals("icon") && cs != null && !cs.empty() && Icons.has(cs.icon)) Icons.draw(g, cs.icon, (int) cx, (int) cy, cis);
         } else {
             WheelConfig.Slot is = cs != null && Icons.has(cs.icon) ? cs : null;
             boolean showIcon = cm.equals("icon") && is != null;
