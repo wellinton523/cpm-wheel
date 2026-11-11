@@ -25,6 +25,34 @@ public class WheelConfig {
         public String mode = "";
         public int min = 0, max = -1, step = -1;
         public String presets = "0,25,50,75,100";
+        /** frames mode: one entry per frame */
+        public List<Frame> frames = null;
+
+        public void ensureFrames() {
+            if (frames == null) frames = new ArrayList<>();
+            while (frames.size() < 2) frames.add(new Frame());
+        }
+        public int frameValue(int i) {
+            ensureFrames();
+            int n = frames.size();
+            if (i < 0) i = 0; if (i >= n) i = n - 1;
+            Frame f = frames.get(i);
+            if (f.value >= 0) return f.value;
+            return Math.round(minV() + (maxV() - minV()) * (i / (float) (n - 1)));
+        }
+        /** index of the frame whose value is closest to v (exact match wins) */
+        public int frameIndexOf(int v) {
+            ensureFrames();
+            int best = 0, bd = Integer.MAX_VALUE;
+            for (int i = 0; i < frames.size(); i++) { int d = Math.abs(frameValue(i) - v); if (d < bd) { bd = d; best = i; } }
+            return best;
+        }
+        public String frameName(int i) {
+            ensureFrames();
+            if (i < 0 || i >= frames.size()) return "?";
+            String n = frames.get(i).name;
+            return n == null || n.isBlank() ? "#" + (i + 1) : n;
+        }
 
         public boolean isFolder() { return children != null; }
         public String effectiveMode() {
@@ -49,6 +77,14 @@ public class WheelConfig {
         public boolean empty() { return !isFolder() && (anim == null || anim.isBlank()); }
     }
 
+    public static class Frame {
+        public String name = "";
+        /** exact CPM value, -1 = auto (evenly spread min..max) */
+        public int value = -1;
+        /** swatch color, 0 = none */
+        public int color = 0;
+    }
+
     public static class Page {
         public String name = "Page";
         public List<Slot> slots = new ArrayList<>();
@@ -66,6 +102,12 @@ public class WheelConfig {
     /** center size in percent (50-200) */
     public int centerSize = 100;
     public int configVersion = 2;
+    public boolean frameSegments = true;
+    public boolean hudEnabled = true;
+    public String hudCorner = "top_left";
+    public int hudScale = 100;
+    public int hudOpacity = 60;
+    public boolean hudOnlyNonDefault = true;
     public boolean showFavoritesPage = true;
     public int lastPage = 0;
     public List<Page> pages = new ArrayList<>();
@@ -99,6 +141,8 @@ public class WheelConfig {
                         c.configVersion = 2;
                     }
                     if (c.centerMode == null || c.centerMode.isBlank()) c.centerMode = "player";
+                    if (c.hudCorner == null || c.hudCorner.isBlank()) c.hudCorner = "top_left";
+                    if (c.hudScale <= 0) c.hudScale = 100;
                     c.centerSize = Math.max(50, Math.min(200, c.centerSize <= 0 ? 100 : c.centerSize));
                     return c;
                 }

@@ -27,17 +27,22 @@ public class CpmWheel {
     public static final KeyMapping KEY_EDIT = new KeyMapping("key.cpmwheel.edit",
             InputConstants.Type.KEYSYM, InputConstants.UNKNOWN.getValue(), "key.categories.cpmwheel");
 
+    public static final KeyMapping KEY_HUD = new KeyMapping("key.cpmwheel.hud",
+            InputConstants.Type.KEYSYM, GLFW.GLFW_KEY_H, "key.categories.cpmwheel");
+
     public CpmWheel() {
         if (FMLEnvironment.dist != Dist.CLIENT) return;
         var bus = FMLJavaModLoadingContext.get().getModEventBus();
         bus.addListener(this::keys);
         bus.addListener(this::imc);
         MinecraftForge.EVENT_BUS.addListener(this::tick);
+        MinecraftForge.EVENT_BUS.addListener((net.minecraftforge.client.event.RenderGuiEvent.Post e) -> Hud.render(e.getGuiGraphics()));
     }
 
     private void keys(RegisterKeyMappingsEvent e) {
         e.register(KEY_WHEEL);
         e.register(KEY_EDIT);
+        e.register(KEY_HUD);
     }
 
     private void imc(InterModEnqueueEvent e) {
@@ -51,6 +56,13 @@ public class CpmWheel {
         Minecraft mc = Minecraft.getInstance();
         while (KEY_WHEEL.consumeClick()) {
             if (mc.screen == null && mc.player != null) mc.setScreen(new WheelScreen(true));
+        }
+        while (KEY_HUD.consumeClick()) {
+            if (mc.screen == null && mc.player != null) {
+                WheelConfig c = WheelConfig.get();
+                c.hudEnabled = !c.hudEnabled; c.save(); Hud.invalidate();
+                mc.player.displayClientMessage(net.minecraft.network.chat.Component.translatable("cpmwheel.hud.toggled", c.hudEnabled ? "ON" : "OFF"), true);
+            }
         }
         while (KEY_EDIT.consumeClick()) {
             if (mc.screen == null && mc.player != null) mc.setScreen(new EditScreen(null));

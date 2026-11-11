@@ -18,6 +18,7 @@ public class WheelScreen extends Screen {
     private List<WheelConfig.Page> pages;
     private int page;
     private int hovered = -1;
+    private int hoveredFrame = -1; // outer frame segment under the mouse (frames slots)
     private long openedAt, transitionAt, lastFrame;
     private int transitionDir = 0; // +1 entering sub-wheel, -1 leaving
     private final List<WheelConfig.Slot> path = new ArrayList<>(); // open folders
@@ -45,6 +46,8 @@ public class WheelScreen extends Screen {
             cfg.previewOnHover = !cfg.previewOnHover; if (!cfg.previewOnHover) endPreview(true); cfg.save();
             b.setMessage(Component.translatable(cfg.previewOnHover ? "cpmwheel.preview.on" : "cpmwheel.preview.off"));
         }).bounds(width - 254, height - 26, 166, 20).build());
+        addRenderableWidget(Button.builder(Component.translatable("cpmwheel.hud"), b -> { endPreview(true); minecraft.setScreen(new HudScreen(this)); })
+                .bounds(width - 304, height - 26, 46, 20).build());
     }
 
     private float radius() { return Math.min(width, height) * 0.36f; }
@@ -85,6 +88,12 @@ public class WheelScreen extends Screen {
         if (s.isFolder()) { enter(s); return; }
         if (isValue(s)) {
             endPreview(true);
+            if ("frames".equals(s.effectiveMode())) {
+                int k = hoveredFrame >= 0 ? hoveredFrame : (s.frameIndexOf(curVal(s)) + 1) % s.frames.size();
+                applyValue(s, s.frameValue(k));
+                holdActive = false; // stay open
+                return;
+            }
             if ("presets".equals(s.effectiveMode())) {
                 int[] ps = s.presetValues();
                 int c = curVal(s), next = ps[0];
@@ -177,6 +186,7 @@ public class WheelScreen extends Screen {
             hovered = (int) Math.floor((ang + seg / 2) / seg) % n;
         }
         updatePreview(hovered >= 0 && hovered < slots.size() ? slots.get(hovered) : null);
+        if (hovered < 0 || hovered >= slots.size() || !"frames".equals(slots.get(hovered).effectiveMode())) hoveredFrame = -1;
 
         for (int i = 0; i < slots.size(); i++) {
             WheelConfig.Slot s = slots.get(i);
@@ -189,7 +199,30 @@ public class WheelScreen extends Screen {
             Draw.sector(g, cx, cy, r0, ro, a0, a1, fade(h > 0.5f ? 0xC0102838 : 0xA00A1420, alpha));
             Draw.sector(g, cx, cy, ro - 3, ro, a0, a1, Draw.argb(s.empty() ? 0x334455 : s.color, Math.round((170 + 85 * h) * alpha)));
             if (on) Draw.sector(g, cx, cy, r0, r0 + 3, a0, a1, Draw.argb(s.color, Math.round(255 * alpha)));
-            if (isValue(s) && alpha > 0.5f) {
+            if (isValue(s) && alpha > 0.5f && "frames".equals(s.effectiveMode()) && cfg.frameSegments) {
+                s.ensureFrames();
+                int nf = s.frames.size(), curK = s.frameIndexOf(curVal(s));
+                double fs = (a1 - a0) / nf;
+                if (hv) { // which frame segment is under the mouse
+                    double md = Math.hypot(mx - cx, my - cy);
+                    hoveredFrame = -1;
+                    if (md >= ro + 1 && md <= ro + 16) {
+                        double ang = Math.atan2(mx - cx, -(my - cy));
+                        double rel = ang - a0;
+                        while (rel < 0) rel += Math.PI * 2;
+                        while (rel >= Math.PI * 2) rel -= Math.PI * 2;
+                        if (rel <= a1 - a0) hoveredFrame = Math.min(nf - 1, (int) (rel / fs));
+                    }
+                }
+                for (int f = 0; f < nf; f++) {
+                    WheelConfig.Frame fr = s.frames.get(f);
+                    int col = fr.color != 0 ? fr.color : s.color;
+                    boolean big = hv && f == hoveredFrame;
+                    float rin = ro + 2, rout = ro + (big ? 14 : (f == curK ? 10 : 6));
+                    Draw.sector(g, cx, cy, rin, rout, a0 + f * fs + 0.006, a0 + (f + 1) * fs - 0.006,
+                            Draw.argb(col, Math.round((f == curK || big ? 255 : 110) * alpha)));
+                }
+            } else if (isValue(s) && alpha > 0.5f) {
                 float p = pct(s, curVal(s));
                 Draw.sector(g, cx, cy, ro + 2, ro + 5, a0, a1, Draw.argb(0x1A2A3A, Math.round(220 * alpha)));
                 Draw.sector(g, cx, cy, ro + 2, ro + 5, a0, a0 + (a1 - a0) * p, Draw.argb(s.color, Math.round(255 * alpha)));
@@ -233,7 +266,20 @@ public class WheelScreen extends Screen {
             g.drawCenteredString(font, path.isEmpty() ? (page + 1) + "/" + pages.size() : "\u2190", (int) cx, (int) cy + 8, 0x7FA8B8);
         }
 
-        if (hs != null && isValue(hs)) {
+        if (hs != null && isValue(hs) && "frames".equals(hs.effectiveMode())) {
+            int v = curVal(hs);
+            int fk = hoveredFrame >= 0 ? hoveredFrame : hs.frameIndexOf(v);
+            boolean pending = hoveredFrame >= 0 && hoveredFrame != hs.frameIndexOf(v);
+            int ty2 = (int) (cy - R - 40);
+            g.pose().pushPose();
+            g.pose().translate(cx, ty2, 0);
+            g.pose().scale(2f, 2f, 1f);
+            String nm = (pending ? "\u2192 " : "") + hs.frameName(fk);
+            g.drawCenteredString(font, nm, 0, 0, pending ? 0xFFD23B : 0xFFFFFF);
+            g.pose().popPose();
+            g.drawCenteredString(font, Component.translatable("cpmwheel.frames.of", fk + 1, hs.frames.size(), hs.frameValue(fk)), (int) cx, ty2 + 20, 0x2EE6FF);
+            g.drawCenteredString(font, Component.translatable("cpmwheel.value.hint.frames"), (int) cx, ty2 - 12, 0x7FA8B8);
+        } else if (hs != null && isValue(hs)) {
             int v = curVal(hs);
             String txt = Math.round(pct(hs, v) * 100) + "%  (" + v + ")";
             int ty2 = (int) (cy - R - 22);
@@ -307,6 +353,11 @@ public class WheelScreen extends Screen {
         List<WheelConfig.Slot> sl = slots();
         if (hovered >= 0 && hovered < sl.size() && isValue(sl.get(hovered))) {
             WheelConfig.Slot s = sl.get(hovered);
+            if ("frames".equals(s.effectiveMode())) {
+                s.ensureFrames();
+                int k = Math.max(0, Math.min(s.frames.size() - 1, s.frameIndexOf(curVal(s)) + (d > 0 ? 1 : -1)));
+                applyValue(s, s.frameValue(k));
+            } else
             applyValue(s, curVal(s) + (d > 0 ? 1 : -1) * s.stepV() * (hasShiftDown() ? 5 : 1));
             return true;
         }

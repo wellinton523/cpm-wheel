@@ -128,7 +128,7 @@ public class EditScreen extends Screen {
                 Component mc = m.isEmpty() ? Component.translatable("cpmwheel.edit.mode.auto", s.effectiveMode())
                         : Component.translatable(m.equals("toggle") ? "cpmwheel.edit.mode.toggle_s" : "cpmwheel.edit.mode." + m);
                 addRenderableWidget(Button.builder(mc, b -> {
-                    String[] order = {"", "toggle", "slider", "presets"};
+                    String[] order = {"", "toggle", "slider", "presets", "frames"};
                     int i = java.util.Arrays.asList(order).indexOf(s.mode == null ? "" : s.mode);
                     s.mode = order[(i + 1) % order.length]; rebuildWidgets();
                 }).bounds(px, y, 160, 18).build());
@@ -138,6 +138,11 @@ public class EditScreen extends Screen {
                     EditBox mxb = num(px + 54, y + 10, s.max <= 0 ? "" : "" + s.max, "" + s.maxV(), v -> s.max = v);
                     EditBox st = num(px + 108, y + 10, s.step <= 0 ? "" : "" + s.step, "" + s.stepV(), v -> s.step = v);
                     y += 30;
+                    if ("frames".equals(s.effectiveMode())) {
+                        s.ensureFrames();
+                        addRenderableWidget(Button.builder(Component.translatable("cpmwheel.edit.frames", s.frames.size()),
+                                b -> minecraft.setScreen(new FramesScreen(this, s))).bounds(px, y + 9, 160, 18).build());
+                    }
                     if ("presets".equals(s.effectiveMode())) {
                         EditBox pr = new EditBox(font, px, y + 10, 160, 16, Component.literal(""));
                         pr.setValue(s.presets == null ? "" : s.presets);
