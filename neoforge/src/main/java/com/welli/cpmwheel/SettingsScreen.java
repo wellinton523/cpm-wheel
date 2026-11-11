@@ -58,7 +58,10 @@ public class SettingsScreen extends Screen {
         y = 26;
         addRenderableWidget(Button.builder(Component.translatable("cpmwheel.set.sounds", onoff(cfg.sounds)), b -> { cfg.sounds = !cfg.sounds; rebuildWidgets(); if (cfg.sounds) Actions.sound(cfg, 1.2f); }).bounds(x2, y, 150, 20).build()); y += 22;
         slider(x2, y, "cpmwheel.set.volume", 0, 100, 5, cfg.soundVolume, v -> cfg.soundVolume = v); y += 22;
-        addRenderableWidget(Button.builder(Component.translatable("cpmwheel.set.alt", onoff(cfg.altHotkeys)), b -> { cfg.altHotkeys = !cfg.altHotkeys; rebuildWidgets(); }).bounds(x2, y, 150, 20).build()); y += 26;
+        addRenderableWidget(Button.builder(Component.translatable("cpmwheel.set.alt", onoff(cfg.altHotkeys)), b -> { cfg.altHotkeys = !cfg.altHotkeys; rebuildWidgets(); }).bounds(x2, y, 150, 20).build()); y += 22;
+        addRenderableWidget(Button.builder(Component.translatable("cpmwheel.set.fp", Component.translatable("cpmwheel.fp." + cfg.fpAnimations)), b -> {
+            cfg.fpAnimations = next(FpState.MODES, cfg.fpAnimations, 1); FpState.mode = cfg.fpAnimations; rebuildWidgets(); })
+            .tooltip(net.minecraft.client.gui.components.Tooltip.create(Component.translatable("cpmwheel.fp.help"))).bounds(x2, y, 150, 20).build()); y += 26;
         presetName = new EditBox(font, x2, y, 96, 18, Component.literal(""));
         presetName.setHint(Component.translatable("cpmwheel.set.presetname"));
         presetName.setMaxLength(32);
@@ -128,7 +131,7 @@ public class SettingsScreen extends Screen {
     public void renderBackground(GuiGraphics g, int mx, int my, float pt) {}
 
     @Override
-    public void onClose() { cfg.fixup(); cfg.save(); Hud.invalidate(); minecraft.setScreen(parent); }
+    public void onClose() { cfg.fixup(); cfg.save(); Hud.invalidate(); Actions.invalidate(); minecraft.setScreen(parent); }
 
     @Override
     public boolean isPauseScreen() { return false; }

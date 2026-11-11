@@ -8,6 +8,8 @@ displayName="${mod_name}"
 authors="Zeraph"
 description='''Roda radial para organizar e tocar as animacoes do Customizable Player Models.'''
 displayTest="IGNORE_ALL_VERSION"
+[[mixins]]
+config="cpmwheel.mixins.json"
 [[dependencies.${mod_id}]]
     modId="neoforge"
     type="required"

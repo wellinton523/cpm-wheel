@@ -152,7 +152,7 @@ public class WheelScreen extends Screen {
 
     // ---------- live preview ----------
     private static boolean previewable(WheelConfig.Slot s) {
-        return s != null && !s.empty() && !s.isFolder() && !s.isGroup() && !WheelConfig.RESET.equals(s.anim);
+        return s != null && !s.empty() && !s.isFolder() && !s.isGroup() && !s.isCond() && !WheelConfig.RESET.equals(s.anim);
     }
 
     private static boolean isValue(WheelConfig.Slot s) { return previewable(s) && !"toggle".equals(s.effectiveMode()); }
@@ -299,7 +299,8 @@ public class WheelScreen extends Screen {
                 int iy = (int) ty + Math.max(8, isz / 2 + 2) + (s.iconOnly(cfg) ? 0 : 4);
                 g.drawCenteredString(font, gst == 2 ? "ON" : gst == 1 ? "\u25D0" : "OFF", (int) tx, iy, gst == 2 ? 0x3BFF9D : gst == 1 ? 0xFFD23B : 0x7FA8B8);
             }
-            int rem = s.empty() || s.isFolder() || s.isGroup() ? -1 : Actions.remaining(s.anim);
+            if (s.isCond() && s.lastMatch != null) g.drawCenteredString(font, font.plainSubstrByWidth(s.lastMatch, (int) (R * 0.7f)), (int) tx, (int) ty + Math.max(8, isz / 2 + 2) + (s.iconOnly(cfg) ? 0 : 4), 0x7FA8B8);
+            int rem = s.empty() || s.isFolder() || s.isGroup() || s.isCond() ? -1 : Actions.remaining(s.anim);
             if (rem >= 0) g.drawCenteredString(font, "\u23F1" + rem + "s", (int) tx, (int) ty + Math.max(8, isz / 2 + 2), 0xFFD23B);
         }
 

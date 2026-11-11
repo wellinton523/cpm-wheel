@@ -123,6 +123,15 @@ public class EditScreen extends Screen {
                 int i = java.util.Arrays.asList(WheelConfig.Slot.DISPLAY_MODES).indexOf(s.displayMode == null ? "" : s.displayMode);
                 s.displayMode = WheelConfig.Slot.DISPLAY_MODES[(i + 1) % WheelConfig.Slot.DISPLAY_MODES.length]; rebuildWidgets();
             }).bounds(px, y, 160, 18).build()); y += 22;
+            { // free keybind
+                String conflict = keyConflict(s);
+                Component kl = capture == s ? Component.translatable("cpmwheel.edit.key.press")
+                        : Component.literal((conflict != null ? "\u26A0 " : "")).append(Component.translatable("cpmwheel.edit.key", Actions.keyName(s.key, s.keyMods)));
+                Button kb = Button.builder(kl, b -> { capture = s; rebuildWidgets(); }).bounds(px, y, 160, 18).build();
+                kb.setTooltip(net.minecraft.client.gui.components.Tooltip.create(conflict != null
+                        ? Component.translatable("cpmwheel.edit.key.conflict", conflict) : Component.translatable("cpmwheel.edit.key.help")));
+                addRenderableWidget(kb); y += 22;
+            }
             if (s.isFolder()) {
                 addRenderableWidget(Button.builder(Component.translatable("cpmwheel.edit.folder.open"), b -> {
                     path.add(s); selected = -1; rebuildWidgets(); }).bounds(px, y, 160, 18).build());
@@ -141,15 +150,19 @@ public class EditScreen extends Screen {
                 Component mc = m.isEmpty() ? Component.translatable("cpmwheel.edit.mode.auto", s.effectiveMode())
                         : Component.translatable(m.equals("toggle") ? "cpmwheel.edit.mode.toggle_s" : "cpmwheel.edit.mode." + m);
                 addRenderableWidget(Button.builder(mc, b -> {
-                    String[] order = {"", "toggle", "slider", "presets", "frames", "group"};
+                    String[] order = {"", "toggle", "slider", "presets", "frames", "group", "cond"};
                     int i = java.util.Arrays.asList(order).indexOf(s.mode == null ? "" : s.mode);
                     s.mode = order[(i + 1) % order.length]; rebuildWidgets();
                 }).bounds(px, y, 160, 18).build());
                 y += 20;
                 if (s.isGroup()) {
-                    if (s.members == null) { s.members = new ArrayList<>(); if (s.anim != null && !s.anim.isBlank() && !WheelConfig.RESET.equals(s.anim)) s.members.add(s.anim); }
-                    addRenderableWidget(Button.builder(Component.translatable("cpmwheel.edit.group", s.memberList().size()),
+                    if (s.groupMembers == null) { s.groupMembers = new ArrayList<>(); if (s.anim != null && !s.anim.isBlank() && !WheelConfig.RESET.equals(s.anim)) s.groupMembers.add(new WheelConfig.Member(s.anim)); }
+                    addRenderableWidget(Button.builder(Component.translatable("cpmwheel.edit.group", s.groupList().size()),
                             b -> minecraft.setScreen(new GroupScreen(this, s))).bounds(px, y + 9, 160, 18).build());
+                } else if (s.isCond()) {
+                    if (s.rules == null) s.rules = new ArrayList<>();
+                    addRenderableWidget(Button.builder(Component.translatable("cpmwheel.edit.cond", s.ruleList().size()),
+                            b -> minecraft.setScreen(new CondScreen(this, s))).bounds(px, y + 9, 160, 18).build());
                 } else if (!"toggle".equals(s.effectiveMode()) && !WheelConfig.RESET.equals(s.anim)) {
                     EditBox mn = num(px, y + 10, s.min <= 0 ? "" : "" + s.min, "0", v -> s.min = v);
                     EditBox mxb = num(px + 54, y + 10, s.max <= 0 ? "" : "" + s.max, "" + s.maxV(), v -> s.max = v);
@@ -189,6 +202,35 @@ public class EditScreen extends Screen {
     }
 
     private int valueLabels = -1;
+    private WheelConfig.Slot capture = null; // slot waiting for a key press
+
+    /** other slot or vanilla/mod key mapping on the same key, null if none */
+    private String keyConflict(WheelConfig.Slot s) {
+        if (s.key < 0) return null;
+        for (WheelConfig.Slot o : cfg.allSlots()) if (o != s && o.key == s.key && (o.keyMods & 7) == (s.keyMods & 7)) return o.display();
+        for (net.minecraft.client.KeyMapping km : minecraft.options.keyMappings) {
+            if (km.isUnbound()) continue;
+            var k = km.getKey();
+            if (k.getType() == com.mojang.blaze3d.platform.InputConstants.Type.KEYSYM && k.getValue() == s.key)
+                return Component.translatable(km.getName()).getString() + ((s.keyMods & 7) != 0 ? " (+mod)" : "");
+        }
+        if ((s.keyMods & 4) != 0 && s.key >= org.lwjgl.glfw.GLFW.GLFW_KEY_1 && s.key <= org.lwjgl.glfw.GLFW.GLFW_KEY_9 && cfg.altHotkeys) return "Alt+1..9";
+        return null;
+    }
+
+    @Override
+    public boolean keyPressed(int key, int sc, int mod) {
+        if (capture != null) {
+            if (key == com.mojang.blaze3d.platform.InputConstants.KEY_ESCAPE) { capture.key = -1; capture.keyMods = 0; }
+            else if (key == org.lwjgl.glfw.GLFW.GLFW_KEY_LEFT_SHIFT || key == org.lwjgl.glfw.GLFW.GLFW_KEY_RIGHT_SHIFT
+                    || key == org.lwjgl.glfw.GLFW.GLFW_KEY_LEFT_CONTROL || key == org.lwjgl.glfw.GLFW.GLFW_KEY_RIGHT_CONTROL
+                    || key == org.lwjgl.glfw.GLFW.GLFW_KEY_LEFT_ALT || key == org.lwjgl.glfw.GLFW.GLFW_KEY_RIGHT_ALT) return true; // wait for the real key
+            else { capture.key = key; capture.keyMods = mod & 7; }
+            capture = null; rebuildWidgets();
+            return true;
+        }
+        return super.keyPressed(key, sc, mod);
+    }
 
     /** 6-digit hex colour field; applies only valid values */
     private EditBox hexBox(int x, int y, String val, java.util.function.IntConsumer set) {
@@ -362,7 +404,7 @@ public class EditScreen extends Screen {
 
     @Override
     public void onClose() {
-        cfg.save();
+        cfg.save(); Actions.invalidate();
         minecraft.setScreen(parent instanceof WheelScreen ? new WheelScreen(false) : null);
     }
 

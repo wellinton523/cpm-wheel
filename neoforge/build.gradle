@@ -188,3 +188,5 @@ idea {
         downloadJavadoc = true
     }
 }
+
+tasks.named('jar', Jar).configure { exclude 'com/tom/**' } // CPM compile-only stubs

@@ -31,21 +31,52 @@ public class WheelConfig {
         public int duration = 0;
         /** how this button is drawn: "" = follow global icons-only, "icon", "text", "both" */
         public String displayMode = "";
-        /** group slot ("Grupo"): toggle animations switched on/off together */
+        /** group slot ("Grupo"): members with a target action each. Old 1.4.5 field, migrated to groupMembers. */
         public List<String> members = null;
+        public List<Member> groupMembers = null;
         public boolean isGroup() { return "group".equals(mode); }
-        /** non-blank members (never null) */
-        public List<String> memberList() {
-            List<String> l = new ArrayList<>();
-            if (members != null) for (String a : members) if (a != null && !a.isBlank() && !l.contains(a)) l.add(a);
+        /** runtime: group applied + values before applying (restored on the second click) */
+        public transient boolean groupOn = false;
+        public transient Map<String, Integer> groupPrev = new HashMap<>();
+        /** valid members, never null */
+        public List<Member> groupList() {
+            List<Member> l = new ArrayList<>();
+            if (groupMembers != null) for (Member m : groupMembers) if (m != null && m.anim != null && !m.anim.isBlank()) l.add(m);
             return l;
         }
-        /** 0 = all off/unknown, 1 = mixed, 2 = all on (members with unknown state are ignored) */
+        public Member member(String a) { for (Member m : groupList()) if (m.anim.equals(a)) return m; return null; }
+        /** 0 = off, 1 = mixed, 2 = all targets currently match (toggle members follow the applied flag) */
         public int groupState() {
-            int on = 0, known = 0;
-            for (String a : memberList()) { int v = CpmBridge.playing(a); if (v < 0) continue; known++; if (v > 0) on++; }
-            return known == 0 || on == 0 ? 0 : on == known ? 2 : 1;
+            int match = 0, known = 0;
+            for (Member m : groupList()) {
+                if ("toggle".equals(m.action)) continue;
+                int v = CpmBridge.playing(m.anim);
+                if (v < 0) continue;
+                known++;
+                if (m.matches(v)) match++;
+            }
+            if (known == 0) return groupOn ? 2 : 0;
+            return match == known ? 2 : match == 0 ? 0 : 1;
         }
+
+        /** free keybind: GLFW key code (-1 = none) + GLFW modifier bits (1 shift, 2 ctrl, 4 alt) */
+        public int key = -1;
+        public int keyMods = 0;
+
+        /** conditional slot ("Condicional"): first rule matching the held item plays its animation */
+        public List<Rule> rules = null;
+        public String fallback = "";
+        public boolean condAuto = false;
+        public boolean isCond() { return "cond".equals(mode); }
+        public List<Rule> ruleList() {
+            List<Rule> l = new ArrayList<>();
+            if (rules != null) for (Rule r : rules) if (r != null) l.add(r);
+            return l;
+        }
+        /** runtime: what the last evaluation matched (for HUD) and the animation auto-applied */
+        public transient String lastMatch = null;
+        public transient String autoApplied = null;
+
         public static final String[] DISPLAY_MODES = {"", "icon", "text", "both"};
         /** resolved: true = draw icon/glyph only */
         public boolean iconOnly(WheelConfig c) { String m = displayMode == null ? "" : displayMode; return m.equals("icon") || (m.isEmpty() && c.iconOnly); }
@@ -97,8 +128,46 @@ public class WheelConfig {
         }
         public Slot() {}
         public Slot(String a) { anim = a; }
-        public String display() { return label != null && !label.isBlank() ? label : (isFolder() ? "..." : isGroup() ? "Grupo" : RESET.equals(anim) ? "Reset" : anim); }
-        public boolean empty() { return !isFolder() && !isGroup() && (anim == null || anim.isBlank()); }
+        public String display() { return label != null && !label.isBlank() ? label : (isFolder() ? "..." : isGroup() ? "Grupo" : isCond() ? "Condicional" : RESET.equals(anim) ? "Reset" : anim); }
+        public boolean empty() { return !isFolder() && !isGroup() && !isCond() && (anim == null || anim.isBlank()); }
+    }
+
+    /** group member: anim + action "on" | "off" | "toggle" | "value" (value or named frame) */
+    public static class Member {
+        public String anim = "";
+        public String action = "on";
+        public int value = -1;
+        public String frame = "";
+        public Member() {}
+        public Member(String a) { anim = a; }
+        /** target value for on/off/value, -1 for toggle */
+        public int target() {
+            switch (action == null ? "on" : action) {
+                case "off": return 0;
+                case "toggle": return -1;
+                case "value": {
+                    if (frame != null && !frame.isBlank() && current != null)
+                        for (Slot s : current.allSlots())
+                            if (anim.equals(s.anim) && s.frames != null)
+                                for (int i = 0; i < s.frames.size(); i++) if (frame.equals(s.frameName(i))) return s.frameValue(i);
+                    return Math.max(0, value);
+                }
+                default: return 1;
+            }
+        }
+        boolean matches(int v) { int t = target(); return "on".equals(action) || action == null ? v > 0 : v == t; }
+    }
+
+    /** conditional rule; empty fields are ignored ("any") */
+    public static class Rule {
+        public String hand = "main";     // main | off | any
+        public String item = "";         // minecraft:diamond_sword
+        public String tag = "";          // #minecraft:swords
+        public String category = "";     // sword axe bow crossbow trident shield tool block empty
+        public String name = "";         // custom name contains
+        public double dmgMin = -1, dmgMax = -1;
+        public String anim = "";
+        public int value = -1;
     }
 
     public static class Frame {
@@ -127,7 +196,7 @@ public class WheelConfig {
     public String centerMode = "player";
     /** center size in percent (50-200) */
     public int centerSize = 100;
-    public int configVersion = 8;
+    public int configVersion = 9;
     private static final String LEGACY_DESIGN = "signalis";
     /** HUD grouped by wheel/folder with nested bars; false = flat list */
     public boolean hudGrouped = true;
@@ -149,6 +218,8 @@ public class WheelConfig {
     public int soundVolume = 50;
     /** Alt+1..9 plays slot 1..9 of the last page without opening the wheel */
     public boolean altHotkeys = true;
+    /** first-person hand follows CPM animations: "off", "layers" (layers/values), "all" (also gestures) */
+    public String fpAnimations = "layers";
     public boolean frameSegments = true;
     public boolean hudEnabled = true;
     public String hudCorner = "top_left";
@@ -196,7 +267,7 @@ public class WheelConfig {
                         c.configVersion = 4;
                     }
                     if (c.configVersion < 7) c.innerRing = false; // 1.4.4: center ring off once on upgrade
-                    if (c.configVersion < 8) c.configVersion = 8; // 1.4.5: group slots (new fields, default none)
+                    if (c.configVersion < 9) c.configVersion = 9; // 1.4.6: group members -> actions (fixup), keybinds, conditional slots // 1.4.5: group slots (new fields, default none)
                     if (c.configVersion < 6) c.configVersion = 6; // 1.4.2: design id rename + per-slot displayMode (defaults to "") handled in fixup()
                     c.fixup();
                     if (c.centerMode == null || c.centerMode.isBlank()) c.centerMode = "player";
@@ -230,6 +301,7 @@ public class WheelConfig {
         for (Page pg : pages) { if (pg.slots == null) pg.slots = new ArrayList<>(); if (pg.color == 0) pg.color = 0x2EE6FF; }
         if (Style.idx(Style.DESIGNS, design) < 0) design = "classic";
         if (Style.idx(Style.THEMES, theme) < 0) theme = "auto";
+        if (!java.util.Arrays.asList(FpState.MODES).contains(fpAnimations)) fpAnimations = "layers";
         iconSize = clamp(iconSize <= 0 ? 100 : iconSize, 50, 250);
         centerIconSize = clamp(centerIconSize <= 0 ? 100 : centerIconSize, 50, 250);
         soundVolume = clamp(soundVolume, 0, 100);
@@ -238,7 +310,17 @@ public class WheelConfig {
         while (recents.size() > 8) recents.remove(recents.size() - 1);
         for (Slot sl : allSlots()) {
             if (sl.duration < 0) sl.duration = 0;
-            if (sl.members != null) sl.members.removeIf(a -> a == null || a.isBlank());
+            if (sl.members != null) { // 1.4.5 groups: every member "Ligar"
+                if (sl.groupMembers == null) sl.groupMembers = new ArrayList<>();
+                for (String a : sl.members) if (a != null && !a.isBlank() && sl.member(a) == null) sl.groupMembers.add(new Member(a));
+                sl.members = null;
+            }
+            if (sl.groupMembers != null) sl.groupMembers.removeIf(m -> m == null || m.anim == null || m.anim.isBlank());
+            if (sl.groupPrev == null) sl.groupPrev = new HashMap<>();
+            if (sl.rules != null) sl.rules.removeIf(java.util.Objects::isNull);
+            if (sl.fallback == null) sl.fallback = "";
+            if (sl.key < -1) sl.key = -1;
+            sl.keyMods &= 7;
             if (sl.displayMode == null || !Arrays.asList(Slot.DISPLAY_MODES).contains(sl.displayMode)) sl.displayMode = "";
         }
     }
@@ -365,17 +447,34 @@ public class WheelConfig {
 
     /** all on -> all off, otherwise (off or mixed) -> all on. Missing animations are skipped. */
     public static void toggleGroup(Slot s) {
-        List<String> l = s.memberList();
+        List<Member> l = s.groupList();
         if (l.isEmpty()) return;
-        int target = s.groupState() == 2 ? 0 : 1;
+        if (s.groupPrev == null) s.groupPrev = new HashMap<>();
         java.util.Set<String> known = CpmBridge.listAnimations().keySet();
-        for (String a : l) if (known.isEmpty() || known.contains(a)) CpmBridge.play(a, target);
+        boolean revert = s.groupState() == 2;
+        if (!revert) s.groupPrev.clear();
+        for (Member m : l) {
+            if (!known.isEmpty() && !known.contains(m.anim)) continue; // missing in this model
+            int cur = CpmBridge.playing(m.anim);
+            if (revert) {
+                Integer prev = s.groupPrev.get(m.anim);
+                if (prev != null) CpmBridge.play(m.anim, prev);
+                else if ("toggle".equals(m.action)) CpmBridge.play(m.anim, cur > 0 ? 0 : 1);
+                else CpmBridge.play(m.anim, "off".equals(m.action) ? 1 : 0);
+            } else {
+                s.groupPrev.put(m.anim, Math.max(0, cur));
+                CpmBridge.play(m.anim, "toggle".equals(m.action) ? (cur > 0 ? 0 : 1) : m.target());
+            }
+        }
+        s.groupOn = !revert;
+        if (revert) s.groupPrev.clear();
         Hud.invalidate();
     }
 
     public static void run(Slot s) {
         if (s == null || s.empty() || s.isFolder()) return;
         if (s.isGroup()) { toggleGroup(s); return; }
+        if (s.isCond()) { Conditions.click(s); return; }
         if (RESET.equals(s.anim)) CpmBridge.resetAll();
         else CpmBridge.play(s.anim, s.value);
     }

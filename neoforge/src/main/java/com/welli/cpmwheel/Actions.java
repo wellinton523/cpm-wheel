@@ -18,6 +18,46 @@ public final class Actions {
     private static final List<Timer> TIMERS = new ArrayList<>();
     private static final boolean[] DOWN = new boolean[9];
 
+    // ---- cached config for per-tick work (refreshed every 2 s or when invalidated, never per frame) ----
+    private static WheelConfig cached;
+    private static long cachedAt = 0;
+    private static List<WheelConfig.Slot> bound = new ArrayList<>();   // slots with a free keybind
+    private static List<WheelConfig.Slot> autoCond = new ArrayList<>(); // conditional slots in auto mode
+    private static final java.util.Map<WheelConfig.Slot, Boolean> BIND_DOWN = new java.util.HashMap<>();
+    private static String heldSig = null;
+
+    /** call after editing slots/settings */
+    public static void invalidate() { cachedAt = 0; heldSig = null; }
+
+    private static void refresh() {
+        WheelConfig c = WheelConfig.get();
+        if (c != cached) for (WheelConfig.Slot s : autoCond) Conditions.autoOff(s); // other model/profile
+        cached = c; cachedAt = System.currentTimeMillis();
+        FpState.mode = c.fpAnimations == null ? "layers" : c.fpAnimations;
+        List<WheelConfig.Slot> b = new ArrayList<>(), a = new ArrayList<>();
+        for (WheelConfig.Slot s : c.allSlots()) {
+            if (s.key >= 0 && !s.isFolder() && !s.empty()) b.add(s);
+            if (s.isCond() && s.condAuto) a.add(s);
+        }
+        for (WheelConfig.Slot s : autoCond) if (!a.contains(s)) Conditions.autoOff(s); // auto switched off
+        bound = b; autoCond = a;
+        BIND_DOWN.keySet().retainAll(b);
+    }
+
+    static int mods(long w) {
+        int m = 0;
+        if (InputConstants.isKeyDown(w, GLFW.GLFW_KEY_LEFT_SHIFT) || InputConstants.isKeyDown(w, GLFW.GLFW_KEY_RIGHT_SHIFT)) m |= 1;
+        if (InputConstants.isKeyDown(w, GLFW.GLFW_KEY_LEFT_CONTROL) || InputConstants.isKeyDown(w, GLFW.GLFW_KEY_RIGHT_CONTROL)) m |= 2;
+        if (InputConstants.isKeyDown(w, GLFW.GLFW_KEY_LEFT_ALT) || InputConstants.isKeyDown(w, GLFW.GLFW_KEY_RIGHT_ALT)) m |= 4;
+        return m;
+    }
+
+    public static String keyName(int key, int mods) {
+        if (key < 0) return "-";
+        String n = InputConstants.Type.KEYSYM.getOrCreate(key).getDisplayName().getString();
+        return ((mods & 2) != 0 ? "Ctrl+" : "") + ((mods & 1) != 0 ? "Shift+" : "") + ((mods & 4) != 0 ? "Alt+" : "") + n;
+    }
+
     /** after a slot was played: remember it, schedule timed revert, click sound */
     public static void played(WheelConfig cfg, WheelConfig.Slot s, int prior) {
         if (s == null || s.empty() || s.isFolder()) return;
@@ -41,7 +81,7 @@ public final class Actions {
     public static void trigger(WheelConfig cfg, WheelConfig.Slot s) {
         if (s == null || s.empty() || s.isFolder()) return;
         int prior = WheelConfig.RESET.equals(s.anim) ? -1 : CpmBridge.playing(s.anim);
-        if (s.isGroup()) { WheelConfig.run(s); sound(cfg, 1.2f); return; }
+        if (s.isGroup() || s.isCond()) { WheelConfig.run(s); sound(cfg, 1.2f); return; }
         String m = WheelConfig.RESET.equals(s.anim) ? "toggle" : s.effectiveMode();
         int cur = prior < 0 ? s.minV() : prior;
         switch (m) {
@@ -73,8 +113,28 @@ public final class Actions {
                 if (now >= t.at) { it.remove(); CpmBridge.play(t.anim, t.revertTo); Hud.invalidate(); }
             }
         }
-        if (mc.screen != null || mc.player == null) { java.util.Arrays.fill(DOWN, false); return; }
+        if (mc.player == null) { java.util.Arrays.fill(DOWN, false); return; }
+        long nowMs = System.currentTimeMillis();
+        if (cached == null || nowMs - cachedAt > 2000) refresh();
+        // conditional auto mode: re-evaluate only when the held items change
+        if (!autoCond.isEmpty()) {
+            var mainS = mc.player.getMainHandItem(); var offS = mc.player.getOffhandItem();
+            String sig = Conditions.itemId(mainS) + "|" + mainS.getHoverName().getString() + "|" + Conditions.itemId(offS) + "|" + offS.getHoverName().getString();
+            if (!sig.equals(heldSig)) { heldSig = sig; for (WheelConfig.Slot s : autoCond) Conditions.auto(s); }
+        }
+        if (mc.screen != null) { java.util.Arrays.fill(DOWN, false); BIND_DOWN.clear(); return; } // GUI/chat open: no hotkeys
         long w = mc.getWindow().getWindow();
+        if (!bound.isEmpty()) { // free keybinds
+            int m = mods(w);
+            for (WheelConfig.Slot s : bound) {
+                boolean d = InputConstants.isKeyDown(w, s.key) && m == (s.keyMods & 7);
+                if (d && !Boolean.TRUE.equals(BIND_DOWN.get(s))) {
+                    trigger(cached, s);
+                    mc.player.displayClientMessage(net.minecraft.network.chat.Component.literal("\u25B6 " + s.display()), true);
+                }
+                BIND_DOWN.put(s, d);
+            }
+        }
         boolean alt = InputConstants.isKeyDown(w, GLFW.GLFW_KEY_LEFT_ALT) || InputConstants.isKeyDown(w, GLFW.GLFW_KEY_RIGHT_ALT);
         if (!alt) { java.util.Arrays.fill(DOWN, false); return; }
         for (int i = 0; i < 9; i++) {
