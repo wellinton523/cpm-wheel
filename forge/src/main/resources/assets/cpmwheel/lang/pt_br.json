@@ -248,5 +248,7 @@
   "cpmwheel.io.held": "Usar item da mão",
   "cpmwheel.io.enabled": "Ajustes por item/mod: %s",
   "cpmwheel.io.pick": "escolha um item ou mod",
-  "cpmwheel.adj.c.flatblock": "bloco plano (flor, porta...)"
+  "cpmwheel.adj.c.flatblock": "bloco plano (flor, porta...)",
+  "cpmwheel.io.item": "Ajustar: item",
+  "cpmwheel.io.arm": "Ajustar: braço"
 }

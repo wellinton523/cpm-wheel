@@ -196,7 +196,7 @@ public class WheelConfig {
     public String centerMode = "player";
     /** center size in percent (50-200) */
     public int centerSize = 100;
-    public int configVersion = 14;
+    public int configVersion = 15;
     private static final String LEGACY_DESIGN = "signalis";
     /** HUD grouped by wheel/folder with nested bars; false = flat list */
     public boolean hudGrouped = true;
@@ -285,6 +285,7 @@ public class WheelConfig {
                         c.configVersion = 4;
                     }
                     if (c.configVersion < 7) c.innerRing = false; // 1.4.4: center ring off once on upgrade
+                    if (c.configVersion < 15) c.configVersion = 15; // 1.5.6: arm overrides per item/mod stored in haItem as "arm/<key>"
                     if (c.configVersion < 14) { c.configVersion = 14; c.haItemOn = true; } // 1.5.5: per-item/per-mod overrides + flatblock category
                     if (c.configVersion < 13) c.configVersion = 13; // 1.5.4: haFlat + haArm (new fields, empty = defaults)
                     if (c.configVersion < 12) { c.configVersion = 12; c.haTwoHandBlock = false; } // 1.5.3: blocks held with one hand by default

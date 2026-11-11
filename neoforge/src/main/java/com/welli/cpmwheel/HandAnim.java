@@ -244,7 +244,7 @@ public final class HandAnim {
             if (savedFor == last && savedFrame == frame) { last.pose().set(savedPose); last.normal().set(savedNormal); }
             else { savedPose.set(last.pose()); savedNormal.set(last.normal()); savedFor = last; savedFrame = frame; }
             // arm position adjust: always applies, even with the other hand animations off
-            armAdjust(ps, hand == InteractionHand.MAIN_HAND, (hand == InteractionHand.MAIN_HAND) == (p.getMainArm() == HumanoidArm.RIGHT) ? 1 : -1);
+            armAdjust(ps, hand == InteractionHand.MAIN_HAND, (hand == InteractionHand.MAIN_HAND) == (p.getMainArm() == HumanoidArm.RIGHT) ? 1 : -1, stack.isEmpty() ? null : stack.getItem());
             if (!master || allBlocked || failed || Float.isNaN(sYaw)) return false;
             if (!loggedFirst) { loggedFirst = true; LOG.info("[cpmwheel] hand animations: stage 4 transforms applied (first frame)"); }
 
@@ -331,8 +331,12 @@ public final class HandAnim {
     static volatile int[][] arm = new int[2][7];
 
     /** view-space arm adjust around the vanilla hand area so rotations/scale stay local; mirrored for the left arm */
-    static void armAdjust(PoseStack ps, boolean main, float side) {
+    static void armAdjust(PoseStack ps, boolean main, float side) { armAdjust(ps, main, side, null); }
+    /** global arm adjust + per-item/per-mod arm override for the held item (priority item > mod) */
+    static void armAdjust(PoseStack ps, boolean main, float side, Item held) {
         int[] a = arm[main ? 0 : 1];
+        int[] o = held != null && itemOverrides ? pick(ITEM_ARM, MOD_ARM, held, main ? 0 : 1) : null;
+        if (o != null) { a = a.clone(); for (int q = 0; q < 7; q++) a[q] += o[q]; }
         boolean any = false; for (int v : a) if (v != 0) { any = true; break; }
         if (!any) return;
         float px = side * 0.6f, py = -0.55f, pz = -0.9f;
@@ -363,12 +367,30 @@ public final class HandAnim {
     static volatile boolean itemOverrides = true;
     static volatile java.util.Map<Item, int[][]> ITEM_ADJ = java.util.Map.of();
     static volatile java.util.Map<String, int[][]> MOD_ADJ = java.util.Map.of();
+    static volatile java.util.Map<Item, int[][]> ITEM_ARM = java.util.Map.of();
+    static volatile java.util.Map<String, int[][]> MOD_ARM = java.util.Map.of();
+    static int[] pick(java.util.Map<Item, int[][]> items, java.util.Map<String, int[][]> mods, Item it, int hi) {
+        int[][] io = items.get(it);
+        int[] o = io == null ? null : io[hi];
+        if (o == null && !mods.isEmpty()) { int[][] mo = mods.get(BuiltInRegistries.ITEM.getKey(it).getNamespace()); o = mo == null ? null : mo[hi]; }
+        return o;
+    }
     static void loadItems(WheelConfig c) {
         java.util.Map<Item, int[][]> m = new java.util.IdentityHashMap<>();
-        java.util.Map<String, int[][]> mods = new java.util.HashMap<>();
+        java.util.Map<String, int[][]> mods = new java.util.HashMap<>(), amods = new java.util.HashMap<>();
+        java.util.Map<Item, int[][]> am = new java.util.IdentityHashMap<>();
         for (var e : c.haItem.entrySet()) {
             String k = e.getKey(); int bar = k.lastIndexOf('|');
             if (bar < 0 || e.getValue() == null || e.getValue().length != 7) continue;
+            if (k.startsWith("arm/")) {
+                String ak = k.substring(4); int ab = ak.lastIndexOf('|');
+                int hi = "off".equals(ak.substring(ab + 1)) ? 1 : 0;
+                if (ak.startsWith("mod:")) { amods.computeIfAbsent(ak.substring(4, ab), x -> new int[2][])[hi] = e.getValue().clone(); continue; }
+                net.minecraft.resources.ResourceLocation arl = net.minecraft.resources.ResourceLocation.tryParse(ak.substring(0, ab));
+                if (arl != null && BuiltInRegistries.ITEM.containsKey(arl))
+                    am.computeIfAbsent(BuiltInRegistries.ITEM.get(arl), x -> new int[2][])[hi] = e.getValue().clone();
+                continue;
+            }
             if (k.startsWith("mod:")) {
                 mods.computeIfAbsent(k.substring(4, bar), x -> new int[2][])["off".equals(k.substring(bar + 1)) ? 1 : 0] = e.getValue().clone();
                 continue;
@@ -378,7 +400,7 @@ public final class HandAnim {
             Item it = BuiltInRegistries.ITEM.get(rl);
             m.computeIfAbsent(it, x -> new int[2][])["off".equals(k.substring(bar + 1)) ? 1 : 0] = e.getValue().clone();
         }
-        ITEM_ADJ = m; MOD_ADJ = mods; itemOverrides = c.haItemOn;
+        ITEM_ADJ = m; MOD_ADJ = mods; ITEM_ARM = am; MOD_ARM = amods; itemOverrides = c.haItemOn;
     }
 
     static int cat(ItemStack s) {

@@ -248,5 +248,7 @@
   "cpmwheel.io.held": "Use held item",
   "cpmwheel.io.enabled": "Item/mod overrides: %s",
   "cpmwheel.io.pick": "pick an item or mod",
-  "cpmwheel.adj.c.flatblock": "flat block (flower, door...)"
+  "cpmwheel.adj.c.flatblock": "flat block (flower, door...)",
+  "cpmwheel.io.item": "Adjust: item",
+  "cpmwheel.io.arm": "Adjust: arm"
 }
