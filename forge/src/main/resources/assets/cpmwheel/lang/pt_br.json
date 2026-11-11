@@ -11,7 +11,7 @@
   "cpmwheel.edit.newpage": "+ Página",
   "cpmwheel.edit.delpage": "- Página",
   "cpmwheel.edit.label": "Nome",
-  "cpmwheel.edit.icon": "Ícone (id do item)",
+  "cpmwheel.edit.icon": "Ícone (id do item ou file:nome.png)",
   "cpmwheel.edit.value": "Valor / cor",
   "cpmwheel.edit.color": "Cor",
   "cpmwheel.edit.test": "Testar",
@@ -19,5 +19,12 @@
   "cpmwheel.edit.help": "Botão direito na lista: testar • Botão direito no slot: favorito • Scroll na roda: página",
   "cpmwheel.edit.mode.hold": "Modo: segurar tecla",
   "cpmwheel.edit.mode.toggle": "Modo: apertar para abrir/fechar",
-  "cpmwheel.edit.autofill": "Adicionar animações que faltam"
+  "cpmwheel.edit.autofill": "Adicionar animações que faltam",
+  "cpmwheel.edit.pickicon": "Escolher ícone…",
+  "cpmwheel.icons.title": "Escolher ícone",
+  "cpmwheel.icons.search": "buscar id do item ou nome do arquivo...",
+  "cpmwheel.icons.open": "Abrir pasta de ícones",
+  "cpmwheel.icons.reload": "Recarregar",
+  "cpmwheel.icons.none": "Sem ícone",
+  "cpmwheel.icons.folder": "%s PNG(s) personalizados em config/cpmwheel/icons"
 }

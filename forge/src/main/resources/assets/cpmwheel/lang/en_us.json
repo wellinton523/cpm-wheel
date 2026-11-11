@@ -11,7 +11,7 @@
   "cpmwheel.edit.newpage": "+ Page",
   "cpmwheel.edit.delpage": "- Page",
   "cpmwheel.edit.label": "Label",
-  "cpmwheel.edit.icon": "Icon (item id)",
+  "cpmwheel.edit.icon": "Icon (item id or file:name.png)",
   "cpmwheel.edit.value": "Value / color",
   "cpmwheel.edit.color": "Color",
   "cpmwheel.edit.test": "Test",
@@ -19,5 +19,12 @@
   "cpmwheel.edit.help": "Right click list item: preview • Right click slot: favorite • Scroll on wheel: page",
   "cpmwheel.edit.mode.hold": "Mode: hold key",
   "cpmwheel.edit.mode.toggle": "Mode: press to toggle",
-  "cpmwheel.edit.autofill": "Add missing animations"
+  "cpmwheel.edit.autofill": "Add missing animations",
+  "cpmwheel.edit.pickicon": "Pick icon…",
+  "cpmwheel.icons.title": "Choose icon",
+  "cpmwheel.icons.search": "search item id or file name...",
+  "cpmwheel.icons.open": "Open icons folder",
+  "cpmwheel.icons.reload": "Reload",
+  "cpmwheel.icons.none": "No icon",
+  "cpmwheel.icons.folder": "%s custom PNG(s) in config/cpmwheel/icons"
 }

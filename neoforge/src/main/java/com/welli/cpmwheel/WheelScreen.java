@@ -6,7 +6,6 @@ import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
-import net.minecraft.world.item.ItemStack;
 import net.minecraft.core.registries.BuiltInRegistries;
 
 import java.util.List;
@@ -82,9 +81,8 @@ public class WheelScreen extends Screen {
 
             double mid = i * seg;
             float tx = cx + (float) Math.sin(mid) * (r0 + R) / 2, ty = cy - (float) Math.cos(mid) * (r0 + R) / 2;
-            ItemStack icon = iconOf(s);
             int textY = (int) ty - 4;
-            if (!icon.isEmpty()) { g.renderItem(icon, (int) tx - 8, (int) ty - 14); textY = (int) ty + 4; }
+            if (Icons.has(s.icon)) { Icons.draw(g, s.icon, (int) tx, (int) ty - 6, 16); textY = (int) ty + 4; }
             String label = s.empty() ? "—" : s.display();
             label = font.plainSubstrByWidth(label, (int) (R * 0.75f));
             g.drawCenteredString(font, label, (int) tx, textY, s.empty() ? 0x55667A : (hv ? 0xFFFFFF : 0xC8E8F0));
@@ -94,6 +92,10 @@ public class WheelScreen extends Screen {
         Draw.sector(g, cx, cy, 0, r0 - 4, 0, Math.PI * 2, 0xD0060C14);
         Draw.sector(g, cx, cy, r0 - 6, r0 - 4, 0, Math.PI * 2, 0xFF2EE6FF);
         String center = hovered >= 0 && hovered < slots.size() && !slots.get(hovered).empty() ? slots.get(hovered).display() : cur().name;
+        if (hovered >= 0 && hovered < slots.size() && Icons.has(slots.get(hovered).icon)) {
+            int isz = (int) Math.min(40, r0 * 0.9f);
+            Icons.draw(g, slots.get(hovered).icon, (int) cx, (int) cy - 12 - isz / 2, isz);
+        }
         g.drawCenteredString(font, font.plainSubstrByWidth(center, (int) (r0 * 1.7f)), (int) cx, (int) cy - 8, 0x2EE6FF);
         g.drawCenteredString(font, (page + 1) + "/" + pages.size(), (int) cx, (int) cy + 4, 0x7FA8B8);
 
@@ -109,13 +111,6 @@ public class WheelScreen extends Screen {
         if (!CpmBridge.cpmPresent()) g.drawCenteredString(font, Component.translatable("cpmwheel.nocpm"), width / 2, height - 20, 0xFF3B5C);
         else g.drawString(font, Component.translatable("cpmwheel.hint"), 8, height - 20, 0x7FA8B8);
         super.render(g, mx, my, pt);
-    }
-
-    static ItemStack iconOf(WheelConfig.Slot s) {
-        if (s.icon == null || s.icon.isBlank()) return ItemStack.EMPTY;
-        ResourceLocation rl = ResourceLocation.tryParse(s.icon.contains(":") ? s.icon : "minecraft:" + s.icon);
-        if (rl == null) return ItemStack.EMPTY;
-        return BuiltInRegistries.ITEM.getOptional(rl).map(ItemStack::new).orElse(ItemStack.EMPTY);
     }
 
     @Override

@@ -74,7 +74,10 @@ public class EditScreen extends Screen {
             label = new EditBox(font, px, y + 10, 160, 16, Component.literal(""));
             label.setValue(s.label == null ? "" : s.label); label.setHint(Component.literal(s.anim));
             label.setResponder(v -> s.label = v); addRenderableWidget(label); y += 30;
-            icon = new EditBox(font, px, y + 10, 160, 16, Component.literal(""));
+            icon = new EditBox(font, px, y + 10, 104, 16, Component.literal(""));
+            icon.setMaxLength(256);
+            addRenderableWidget(Button.builder(Component.translatable("cpmwheel.edit.pickicon"), b ->
+                    minecraft.setScreen(new IconPickerScreen(this, v -> s.icon = v))).bounds(px + 106, y + 9, 54, 18).build());
             icon.setValue(s.icon == null ? "" : s.icon); icon.setHint(Component.literal("minecraft:diamond"));
             icon.setResponder(v -> s.icon = v.trim()); addRenderableWidget(icon); y += 30;
             value = new EditBox(font, px, y + 10, 50, 16, Component.literal(""));
@@ -154,9 +157,8 @@ public class EditScreen extends Screen {
             Draw.sector(g, cx, cy, r0, R, a0, a1, bg);
             Draw.sector(g, cx, cy, R - 3, R, a0, a1, Draw.argb(s.empty() ? 0x334455 : s.color, 230));
             float tx = cx + (float) Math.sin(i * seg) * (r0 + R) / 2, ty = cy - (float) Math.cos(i * seg) * (r0 + R) / 2;
-            var ic = WheelScreen.iconOf(s);
             int textY = (int) ty - 4;
-            if (!ic.isEmpty()) { g.renderItem(ic, (int) tx - 8, (int) ty - 14); textY = (int) ty + 4; }
+            if (Icons.has(s.icon)) { Icons.draw(g, s.icon, (int) tx, (int) ty - 6, 16); textY = (int) ty + 4; }
             String l = s.empty() ? (i + 1) + "" : s.display();
             g.drawCenteredString(font, font.plainSubstrByWidth(l, (int) (R * 0.7f)), (int) tx, textY, s.empty() ? 0x55667A : 0xFFFFFF);
             if (s.favorite) g.drawString(font, "\u2605", (int) tx - 3, textY + 10, 0xFFD23B);
