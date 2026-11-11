@@ -35,6 +35,7 @@ public final class Actions {
         cached = c; cachedAt = System.currentTimeMillis();
         FpState.mode = c.fpAnimations == null ? "layers" : c.fpAnimations;
         HandGlow.mode = c.handGlow == null ? "auto" : c.handGlow;
+        HandAnim.load(c);
         List<WheelConfig.Slot> b = new ArrayList<>(), a = new ArrayList<>();
         for (WheelConfig.Slot s : c.allSlots()) {
             if (s.key >= 0 && !s.isFolder() && !s.empty()) b.add(s);
@@ -107,6 +108,7 @@ public final class Actions {
 
     /** called every client tick */
     public static void tick(Minecraft mc) {
+        HandAnim.tick(mc);
         if (!TIMERS.isEmpty()) {
             long now = System.currentTimeMillis();
             for (Iterator<Timer> it = TIMERS.iterator(); it.hasNext(); ) {

@@ -54,6 +54,8 @@ public class SettingsScreen extends Screen {
         addRenderableWidget(Button.builder(Component.translatable("cpmwheel.edit.center", Component.translatable("cpmwheel.center." + cfg.centerMode)), b -> {
             String[] o = {"player", "icon", "none"}; cfg.centerMode = next(o, cfg.centerMode, 1); rebuildWidgets(); }).bounds(x, y, 150, 20).build()); y += 22;
         addRenderableWidget(Button.builder(Component.translatable("cpmwheel.set.ring", onoff(cfg.innerRing)), b -> { cfg.innerRing = !cfg.innerRing; rebuildWidgets(); }).bounds(x, y, 150, 20).build());
+        y += 22;
+        addRenderableWidget(Button.builder(Component.translatable("cpmwheel.ha.open"), b -> minecraft.setScreen(new HandAnimScreen(this, cfg))).bounds(x, y, 150, 20).build());
 
         y = 26;
         addRenderableWidget(Button.builder(Component.translatable("cpmwheel.set.sounds", onoff(cfg.sounds)), b -> { cfg.sounds = !cfg.sounds; rebuildWidgets(); if (cfg.sounds) Actions.sound(cfg, 1.2f); }).bounds(x2, y, 150, 20).build()); y += 22;

@@ -36,6 +36,10 @@ public class CpmWheel {
         bus.addListener(this::keys);
         bus.addListener(this::imc);
         MinecraftForge.EVENT_BUS.addListener(this::tick);
+        HandAnim.detectConflicts(id -> ModList.get().isLoaded(id));
+        MinecraftForge.EVENT_BUS.addListener((TickEvent.RenderTickEvent e) -> { if (e.phase == TickEvent.Phase.START) HandAnim.frameStart(); });
+        MinecraftForge.EVENT_BUS.addListener((net.minecraftforge.client.event.RenderHandEvent e) ->
+                HandAnim.apply(e.getPoseStack(), e.getHand(), e.getItemStack(), e.getPartialTick(), e.getSwingProgress()));
         MinecraftForge.EVENT_BUS.addListener((net.minecraftforge.client.event.RenderGuiEvent.Post e) -> Hud.render(e.getGuiGraphics()));
     }
 

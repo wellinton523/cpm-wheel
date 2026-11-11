@@ -35,6 +35,10 @@ public class CpmWheel {
         bus.addListener(this::keys);
         bus.addListener(this::imc);
         NeoForge.EVENT_BUS.addListener(this::tick);
+        HandAnim.detectConflicts(id -> ModList.get().isLoaded(id));
+        NeoForge.EVENT_BUS.addListener((net.neoforged.neoforge.client.event.RenderFrameEvent.Pre e) -> HandAnim.frameStart());
+        NeoForge.EVENT_BUS.addListener((net.neoforged.neoforge.client.event.RenderHandEvent e) ->
+                HandAnim.apply(e.getPoseStack(), e.getHand(), e.getItemStack(), e.getPartialTick(), e.getSwingProgress()));
         NeoForge.EVENT_BUS.addListener((net.neoforged.neoforge.client.event.RenderGuiEvent.Post e) -> Hud.render(e.getGuiGraphics()));
     }
 
