@@ -196,7 +196,7 @@ public class WheelConfig {
     public String centerMode = "player";
     /** center size in percent (50-200) */
     public int centerSize = 100;
-    public int configVersion = 9;
+    public int configVersion = 10;
     private static final String LEGACY_DESIGN = "signalis";
     /** HUD grouped by wheel/folder with nested bars; false = flat list */
     public boolean hudGrouped = true;
@@ -220,6 +220,8 @@ public class WheelConfig {
     public boolean altHotkeys = true;
     /** first-person hand follows CPM animations: "off", "layers" (layers/values), "all" (also gestures) */
     public String fpAnimations = "layers";
+    /** glow parts on the 1st-person hand with shaders: "off", "emissive", "auto" (only with an Iris shader pack) */
+    public String handGlow = "auto";
     public boolean frameSegments = true;
     public boolean hudEnabled = true;
     public String hudCorner = "top_left";
@@ -267,7 +269,7 @@ public class WheelConfig {
                         c.configVersion = 4;
                     }
                     if (c.configVersion < 7) c.innerRing = false; // 1.4.4: center ring off once on upgrade
-                    if (c.configVersion < 9) c.configVersion = 9; // 1.4.6: group members -> actions (fixup), keybinds, conditional slots // 1.4.5: group slots (new fields, default none)
+                    if (c.configVersion < 10) c.configVersion = 10; // 1.4.7: handGlow (default auto, set in fixup) // 1.4.6: group members -> actions (fixup), keybinds, conditional slots // 1.4.5: group slots (new fields, default none)
                     if (c.configVersion < 6) c.configVersion = 6; // 1.4.2: design id rename + per-slot displayMode (defaults to "") handled in fixup()
                     c.fixup();
                     if (c.centerMode == null || c.centerMode.isBlank()) c.centerMode = "player";
@@ -302,6 +304,7 @@ public class WheelConfig {
         if (Style.idx(Style.DESIGNS, design) < 0) design = "classic";
         if (Style.idx(Style.THEMES, theme) < 0) theme = "auto";
         if (!java.util.Arrays.asList(FpState.MODES).contains(fpAnimations)) fpAnimations = "layers";
+        if (!java.util.Arrays.asList(HandGlow.MODES).contains(handGlow)) handGlow = "auto";
         iconSize = clamp(iconSize <= 0 ? 100 : iconSize, 50, 250);
         centerIconSize = clamp(centerIconSize <= 0 ? 100 : centerIconSize, 50, 250);
         soundVolume = clamp(soundVolume, 0, 100);

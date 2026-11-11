@@ -34,6 +34,7 @@ public final class Actions {
         if (c != cached) for (WheelConfig.Slot s : autoCond) Conditions.autoOff(s); // other model/profile
         cached = c; cachedAt = System.currentTimeMillis();
         FpState.mode = c.fpAnimations == null ? "layers" : c.fpAnimations;
+        HandGlow.mode = c.handGlow == null ? "auto" : c.handGlow;
         List<WheelConfig.Slot> b = new ArrayList<>(), a = new ArrayList<>();
         for (WheelConfig.Slot s : c.allSlots()) {
             if (s.key >= 0 && !s.isFolder() && !s.empty()) b.add(s);

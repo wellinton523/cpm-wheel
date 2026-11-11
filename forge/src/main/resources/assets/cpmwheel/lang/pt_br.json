@@ -161,5 +161,10 @@
   "cpmwheel.fp.off": "padrão do CPM",
   "cpmwheel.fp.layers": "segue camadas",
   "cpmwheel.fp.all": "segue tudo",
-  "cpmwheel.fp.help": "Mão 1ª pessoa segue animações: o braço em primeira pessoa mostra as animações de camada/valor do CPM (ex.: emoções do bracelete). 'Tudo' também aplica gestos/poses, que podem entortar o braço."
+  "cpmwheel.fp.help": "Mão 1ª pessoa segue animações: o braço em primeira pessoa mostra as animações de camada/valor do CPM (ex.: emoções do bracelete). 'Tudo' também aplica gestos/poses, que podem entortar o braço.",
+  "cpmwheel.set.glow": "Brilho na mão: %s",
+  "cpmwheel.glow.off": "desligado",
+  "cpmwheel.glow.emissive": "sólido emissivo",
+  "cpmwheel.glow.auto": "automático",
+  "cpmwheel.glow.help": "Brilho na mão (shaders): partes com brilho do CPM somem na mão em 1ª pessoa com alguns shaders. Sólido emissivo: sempre desenha com tipo emissivo na mão. Automático: só quando um shader do Iris está ativo."
 }

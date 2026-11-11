@@ -61,7 +61,10 @@ public class SettingsScreen extends Screen {
         addRenderableWidget(Button.builder(Component.translatable("cpmwheel.set.alt", onoff(cfg.altHotkeys)), b -> { cfg.altHotkeys = !cfg.altHotkeys; rebuildWidgets(); }).bounds(x2, y, 150, 20).build()); y += 22;
         addRenderableWidget(Button.builder(Component.translatable("cpmwheel.set.fp", Component.translatable("cpmwheel.fp." + cfg.fpAnimations)), b -> {
             cfg.fpAnimations = next(FpState.MODES, cfg.fpAnimations, 1); FpState.mode = cfg.fpAnimations; rebuildWidgets(); })
-            .tooltip(net.minecraft.client.gui.components.Tooltip.create(Component.translatable("cpmwheel.fp.help"))).bounds(x2, y, 150, 20).build()); y += 26;
+            .tooltip(net.minecraft.client.gui.components.Tooltip.create(Component.translatable("cpmwheel.fp.help"))).bounds(x2, y, 150, 20).build()); y += 22;
+        addRenderableWidget(Button.builder(Component.translatable("cpmwheel.set.glow", Component.translatable("cpmwheel.glow." + cfg.handGlow)), b -> {
+            cfg.handGlow = next(HandGlow.MODES, cfg.handGlow, 1); HandGlow.mode = cfg.handGlow; rebuildWidgets(); })
+            .tooltip(net.minecraft.client.gui.components.Tooltip.create(Component.translatable("cpmwheel.glow.help"))).bounds(x2, y, 150, 20).build()); y += 26;
         presetName = new EditBox(font, x2, y, 96, 18, Component.literal(""));
         presetName.setHint(Component.translatable("cpmwheel.set.presetname"));
         presetName.setMaxLength(32);

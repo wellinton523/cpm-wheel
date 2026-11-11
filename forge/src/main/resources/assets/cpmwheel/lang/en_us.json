@@ -161,5 +161,10 @@
   "cpmwheel.fp.off": "vanilla CPM",
   "cpmwheel.fp.layers": "follows layers",
   "cpmwheel.fp.all": "follows all",
-  "cpmwheel.fp.help": "Makes the first-person arm show CPM layer/value animations (e.g. bracelet emotions). 'All' also applies gestures/poses, which may bend the arm oddly."
+  "cpmwheel.fp.help": "Makes the first-person arm show CPM layer/value animations (e.g. bracelet emotions). 'All' also applies gestures/poses, which may bend the arm oddly.",
+  "cpmwheel.set.glow": "Hand glow: %s",
+  "cpmwheel.glow.off": "off",
+  "cpmwheel.glow.emissive": "emissive",
+  "cpmwheel.glow.auto": "auto (shaders)",
+  "cpmwheel.glow.help": "Glowing CPM parts on the first-person hand disappear with some shader packs. Emissive: always draw them with an emissive entity type in the hand. Auto: only while an Iris shader pack is active."
 }
