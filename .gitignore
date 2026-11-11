@@ -1,0 +1,28 @@
+# Build / tooling
+build/
+.gradle/
+run/
+.idea/
+*.iml
+__pycache__/
+*.pyc
+node_modules/
+.DS_Store
+Thumbs.db
+*.log
+
+# Secrets / machine-local
+*.keystore
+*.jks
+*.p12
+*.pfx
+.env
+.env.*
+!.env.example
+local.properties
+keystore.properties
+
+# Build outputs
+*.apk
+*.aab
+*.idsig
