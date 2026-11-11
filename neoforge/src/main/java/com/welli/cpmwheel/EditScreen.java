@@ -119,6 +119,10 @@ public class EditScreen extends Screen {
             addRenderableWidget(Button.builder(Component.literal("\u2716"), b -> {
                 slots().set(selected, new WheelConfig.Slot()); rebuildWidgets();
             }).bounds(px + 136, y + 9, 24, 18).build()); y += 32;
+            addRenderableWidget(Button.builder(Component.translatable("cpmwheel.edit.display", Component.translatable("cpmwheel.display." + (s.displayMode == null || s.displayMode.isEmpty() ? "default" : s.displayMode))), b -> {
+                int i = java.util.Arrays.asList(WheelConfig.Slot.DISPLAY_MODES).indexOf(s.displayMode == null ? "" : s.displayMode);
+                s.displayMode = WheelConfig.Slot.DISPLAY_MODES[(i + 1) % WheelConfig.Slot.DISPLAY_MODES.length]; rebuildWidgets();
+            }).bounds(px, y, 160, 18).build()); y += 22;
             if (s.isFolder()) {
                 addRenderableWidget(Button.builder(Component.translatable("cpmwheel.edit.folder.open"), b -> {
                     path.add(s); selected = -1; rebuildWidgets(); }).bounds(px, y, 160, 18).build());

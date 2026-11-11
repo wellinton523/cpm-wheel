@@ -92,9 +92,8 @@
   "cpmwheel.set.copydefault": "Copiar perfil padrão p/ cá",
   "cpmwheel.set.profile": "Perfil: %s",
   "cpmwheel.design.classic": "Clássico",
-  "cpmwheel.design.neon": "Neon / Zeraph",
+  "cpmwheel.design.neon": "Neon",
   "cpmwheel.design.minimal": "Minimalista",
-  "cpmwheel.design.signalis": "Signalis / ERENYS",
   "cpmwheel.design.glass": "Vidro",
   "cpmwheel.design.petals": "Pétalas",
   "cpmwheel.design.hex": "Hexágono / Pixel",
@@ -106,5 +105,11 @@
   "cpmwheel.theme.gold": "dourado",
   "cpmwheel.theme.white": "branco",
   "cpmwheel.hud.grouped": "HUD agrupado: %s",
-  "cpmwheel.hud.showempty": "Mostrar grupos vazios: %s"
+  "cpmwheel.hud.showempty": "Mostrar grupos vazios: %s",
+  "cpmwheel.design.terminal": "Terminal",
+  "cpmwheel.edit.display": "Exibir: %s",
+  "cpmwheel.display.default": "Padrão (global)",
+  "cpmwheel.display.icon": "Ícone",
+  "cpmwheel.display.text": "Texto",
+  "cpmwheel.display.both": "Ícone + texto"
 }

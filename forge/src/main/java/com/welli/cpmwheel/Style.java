@@ -6,7 +6,7 @@ import net.minecraft.client.gui.GuiGraphics;
 /** Wheel designs (shape, borders, highlight, center, text). Pure drawing, no state. */
 public final class Style {
     private Style() {}
-    public static final String[] DESIGNS = {"classic", "neon", "minimal", "signalis", "glass", "petals", "hex"};
+    public static final String[] DESIGNS = {"classic", "neon", "minimal", "terminal", "glass", "petals", "hex"};
     public static final String[] THEMES = {"auto", "cyan", "red", "purple", "green", "gold", "white"};
     private static final int[] THEME_RGB = {0, 0x2EE6FF, 0xFF3B5C, 0xB46CFF, 0x3BFF9D, 0xFFD23B, 0xFFFFFF};
     private static final int RED = 0xFF2A3C;
@@ -18,7 +18,7 @@ public final class Style {
         int i = c == null ? -1 : idx(THEMES, c.theme);
         if (i > 0) return THEME_RGB[i];
         switch (design(c)) {
-            case "signalis": return 0xFF3030;
+            case "terminal": return 0xFF3030;
             case "minimal": return 0xE6EEF5;
             case "glass": return 0xBFEFFF;
             case "petals": return 0xFF8FD0;
@@ -26,10 +26,10 @@ public final class Style {
             default: return 0x2EE6FF;
         }
     }
-    /** colour of a slot: the slot colour, except signalis which is monochrome red unless a theme is set */
+    /** colour of a slot: the slot colour, except terminal which is monochrome red unless a theme is set */
     static int slotColor(WheelConfig c, int col, boolean empty) {
         if (empty) return 0x334455;
-        if ("signalis".equals(design(c)) && (c.theme == null || c.theme.equals("auto"))) return accent(c);
+        if ("terminal".equals(design(c)) && (c.theme == null || c.theme.equals("auto"))) return accent(c);
         return col;
     }
 
@@ -45,7 +45,7 @@ public final class Style {
                 for (int k = 0; k < 4; k++) Draw.sector(g, cx, cy, R * (1.04f + k * 0.05f), R * (1.09f + k * 0.05f), 0, Math.PI * 2, a(ac, 22 * (4 - k) / 4f * open));
             }
             case "minimal" -> g.fill(0, 0, w, h, fade(0x70000000, open));
-            case "signalis" -> {
+            case "terminal" -> {
                 g.fill(0, 0, w, h, fade(0xC8080000, open));
                 Draw.grid(g, 0, 0, w, h, 12, 1, a(ac, 50 * open));
                 Draw.scanlines(g, w, h, 3, fade(0x22000000, open));
@@ -82,7 +82,7 @@ public final class Style {
                 Draw.sector(g, cx, cy, ro - 1.2f - h, ro, a0, a1, a(col, (110 + 145 * h) * alpha));
                 if (on) Draw.sector(g, cx, cy, r0 + 3, r0 + 6, mid - 0.04, mid + 0.04, a(col, 255 * alpha));
             }
-            case "signalis" -> {
+            case "terminal" -> {
                 Draw.sector(g, cx, cy, r0, ro, a0, a1, h > 0.5f ? a(col, (150 + 80 * h) * alpha) : fade(0xD0140303, alpha));
                 int steps = Math.max(4, (int) ((a1 - a0) * ro / 6));
                 for (int i = 0; i < steps; i += 2) {
@@ -131,7 +131,7 @@ public final class Style {
                 Draw.sector(g, cx, cy, r - 4, r - 3, 0, Math.PI * 2, a(RED, 150 * alpha));
             }
             case "minimal" -> Draw.sector(g, cx, cy, r - 1, r, 0, Math.PI * 2, a(ac, 140 * alpha));
-            case "signalis" -> {
+            case "terminal" -> {
                 Draw.sector(g, cx, cy, 0, r, 0, Math.PI * 2, fade(0xE00A0101, alpha));
                 for (int i = 0; i < 36; i += 2) Draw.sector(g, cx, cy, r - 2, r, i * Math.PI / 18, (i + 1) * Math.PI / 18, a(ac, 220 * alpha));
                 g.fill((int) (cx - r * 0.8f), (int) cy, (int) (cx + r * 0.8f), (int) cy + 1, a(ac, 60 * alpha));
@@ -155,9 +155,9 @@ public final class Style {
 
     // ---------- text ----------
     public static int textColor(WheelConfig c, boolean hv, boolean empty) {
-        if (empty) return "signalis".equals(design(c)) ? 0x5A2020 : 0x55667A;
+        if (empty) return "terminal".equals(design(c)) ? 0x5A2020 : 0x55667A;
         return switch (design(c)) {
-            case "signalis" -> hv ? 0x140000 : 0xFF7070;
+            case "terminal" -> hv ? 0x140000 : 0xFF7070;
             case "minimal" -> hv ? 0xFFFFFF : 0xB8C2CC;
             case "hex" -> hv ? 0xFFFFFF : 0xB8FFB0;
             default -> hv ? 0xFFFFFF : 0xC8E8F0;
@@ -165,18 +165,18 @@ public final class Style {
     }
 
     public static int textWidth(WheelConfig c, Font f, String s) {
-        return "signalis".equals(design(c)) ? s.length() * 6 : f.width(s);
+        return "terminal".equals(design(c)) ? s.length() * 6 : f.width(s);
     }
 
     public static String fit(WheelConfig c, Font f, String s, int w) {
-        if ("signalis".equals(design(c))) { s = s.toUpperCase(); return s.length() * 6 > w ? s.substring(0, Math.max(0, w / 6)) : s; }
+        if ("terminal".equals(design(c))) { s = s.toUpperCase(); return s.length() * 6 > w ? s.substring(0, Math.max(0, w / 6)) : s; }
         return f.plainSubstrByWidth(s, w);
     }
 
     /** centered label in the design's font styling */
     public static void text(GuiGraphics g, WheelConfig c, Font f, String s, int x, int y, int color) {
         switch (design(c)) {
-            case "signalis" -> { // fake monospace, upper case, no shadow
+            case "terminal" -> { // fake monospace, upper case, no shadow
                 s = s.toUpperCase();
                 int sx = x - s.length() * 3;
                 for (int i = 0; i < s.length(); i++) {
@@ -205,7 +205,7 @@ public final class Style {
         float r = size / 2f;
         int col = slotColor(c, color, false);
         switch (design(c)) {
-            case "signalis", "hex" -> {
+            case "terminal", "hex" -> {
                 if ("hex".equals(design(c))) hexagon(g, x, y, r, a(col, 150 * alpha));
                 else { g.fill((int) (x - r), (int) (y - r), (int) (x + r), (int) (y + r), a(col, 150 * alpha)); g.fill((int) (x - r + 1), (int) (y - r + 1), (int) (x + r - 1), (int) (y + r - 1), fade(0xE0140303, alpha)); }
             }
@@ -218,7 +218,7 @@ public final class Style {
         g.pose().pushPose();
         g.pose().translate(x, y, 0);
         g.pose().scale(sc, sc, 1);
-        g.drawString(f, ch, -f.width(ch) / 2 + ("signalis".equals(design(c)) ? 0 : 0), -4, 0xFFFFFF, !"signalis".equals(design(c)) && !"minimal".equals(design(c)));
+        g.drawString(f, ch, -f.width(ch) / 2 + ("terminal".equals(design(c)) ? 0 : 0), -4, 0xFFFFFF, !"terminal".equals(design(c)) && !"minimal".equals(design(c)));
         g.pose().popPose();
     }
 

@@ -111,7 +111,7 @@ public class SettingsScreen extends Screen {
             Style.segment(g, cfg, cx, cy, r0, ro, a0, a1, s.color, h ? 1f : 0f, i == 0, s.empty(), 1f);
             float rr = (r0 + ro) / 2, tx = cx + (float) Math.sin(i * seg) * rr, ty = cy - (float) Math.cos(i * seg) * rr;
             int isz = Math.max(8, Math.round(Math.min((ro - r0) * 0.95f, 18 * cfg.iconSize / 100f)));
-            if (cfg.iconOnly) { if (!s.empty()) Style.icon(g, cfg, font, s, (int) tx, (int) ty, isz, s.color, 1f); }
+            if (s.iconOnly(cfg)) { if (!s.empty()) Style.icon(g, cfg, font, s, (int) tx, (int) ty, isz, s.color, 1f); }
             else {
                 String l = Style.fit(cfg, font, s.empty() ? "\u2014" : s.display(), (int) (R * 0.75f));
                 Style.text(g, cfg, font, l, (int) tx, (int) ty - 4, Style.textColor(cfg, h, s.empty()));

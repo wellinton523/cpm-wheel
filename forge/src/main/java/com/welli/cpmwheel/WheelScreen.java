@@ -282,13 +282,13 @@ public class WheelScreen extends Screen {
             if (alpha < 0.35f) continue;
             int tcol = Style.textColor(cfg, hv && h > 0.5f, s.empty());
             int isz = Math.max(8, Math.round(Math.min((ro - r0) * 0.95f, 18 * cfg.iconSize / 100f) * (1 + 0.08f * h)));
-            if (cfg.iconOnly) { // icon (or first-letter glyph), no text
+            if (s.iconOnly(cfg)) { // icon (or first-letter glyph), no text
                 if (s.empty()) Draw.sector(g, tx, ty, 0, 1.5f, 0, Math.PI * 2, Draw.argb(0x55667A, Math.round(200 * alpha)));
                 else Style.icon(g, cfg, font, s, (int) tx, (int) ty, isz, s.color, alpha);
                 if (s.favorite) g.drawString(font, "\u2605", (int) tx + isz / 2 - 2, (int) ty - isz / 2 - 4, 0xFFD23B, false);
             } else {
                 int textY = (int) ty - 4;
-                if (Icons.has(s.icon)) { int is2 = Math.min(isz, (int) ((ro - r0) * 0.6f)); Icons.draw(g, s.icon, (int) tx, (int) ty - 2 - is2 / 2, is2); textY = (int) ty + is2 / 2 - 4; }
+                if (s.showIcon(cfg) && Icons.has(s.icon)) { int is2 = Math.min(isz, (int) ((ro - r0) * 0.6f)); Icons.draw(g, s.icon, (int) tx, (int) ty - 2 - is2 / 2, is2); textY = (int) ty + is2 / 2 - 4; }
                 String label = s.empty() ? "\u2014" : (s.isFolder() ? "\u25B8 " : "") + s.display();
                 label = Style.fit(cfg, font, label, (int) (R * 0.75f));
                 Style.text(g, cfg, font, label, (int) tx, textY, tcol);

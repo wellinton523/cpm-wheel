@@ -29,6 +29,13 @@ public class WheelConfig {
         public List<Frame> frames = null;
         /** timed: seconds until the animation is switched back (0 = stays) */
         public int duration = 0;
+        /** how this button is drawn: "" = follow global icons-only, "icon", "text", "both" */
+        public String displayMode = "";
+        public static final String[] DISPLAY_MODES = {"", "icon", "text", "both"};
+        /** resolved: true = draw icon/glyph only */
+        public boolean iconOnly(WheelConfig c) { String m = displayMode == null ? "" : displayMode; return m.equals("icon") || (m.isEmpty() && c.iconOnly); }
+        /** resolved: true = draw icon above text (only when not icon-only) */
+        public boolean showIcon(WheelConfig c) { return !"text".equals(displayMode); }
 
         public void ensureFrames() {
             if (frames == null) frames = new ArrayList<>();
@@ -105,7 +112,8 @@ public class WheelConfig {
     public String centerMode = "player";
     /** center size in percent (50-200) */
     public int centerSize = 100;
-    public int configVersion = 4;
+    public int configVersion = 6;
+    private static final String LEGACY_DESIGN = "signalis";
     /** HUD grouped by wheel/folder with nested bars; false = flat list */
     public boolean hudGrouped = true;
     /** show group headers even when nothing in them is active */
@@ -172,6 +180,7 @@ public class WheelConfig {
                         for (Slot sl : c.allSlots()) if (sl.isFolder() && sl.color == 0x2EE6FF) sl.color = folderColor(n++);
                         c.configVersion = 4;
                     }
+                    if (c.configVersion < 6) c.configVersion = 6; // 1.4.2: design id rename + per-slot displayMode (defaults to "") handled in fixup()
                     c.fixup();
                     if (c.centerMode == null || c.centerMode.isBlank()) c.centerMode = "player";
                     if (c.hudCorner == null || c.hudCorner.isBlank()) c.hudCorner = "top_left";
@@ -200,6 +209,7 @@ public class WheelConfig {
     }
 
     void fixup() {
+        if (LEGACY_DESIGN.equals(design)) design = "terminal"; // 1.4.0/1.4.1 id of the Terminal design
         for (Page pg : pages) { if (pg.slots == null) pg.slots = new ArrayList<>(); if (pg.color == 0) pg.color = 0x2EE6FF; }
         if (Style.idx(Style.DESIGNS, design) < 0) design = "classic";
         if (Style.idx(Style.THEMES, theme) < 0) theme = "auto";
@@ -209,7 +219,10 @@ public class WheelConfig {
         if (recents == null) recents = new ArrayList<>();
         recents.removeIf(r -> r == null || r.isBlank());
         while (recents.size() > 8) recents.remove(recents.size() - 1);
-        for (Slot sl : allSlots()) if (sl.duration < 0) sl.duration = 0;
+        for (Slot sl : allSlots()) {
+            if (sl.duration < 0) sl.duration = 0;
+            if (sl.displayMode == null || !Arrays.asList(Slot.DISPLAY_MODES).contains(sl.displayMode)) sl.displayMode = "";
+        }
     }
     private static int clamp(int v, int a, int b) { return Math.max(a, Math.min(b, v)); }
 
