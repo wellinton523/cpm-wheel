@@ -10,7 +10,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 @Mixin(targets = "com.tom.cpm.client.ClientBase", remap = false)
 public abstract class ClientBaseMixin {
     @Inject(method = "renderHand", at = @At("HEAD"), require = 0, remap = false)
-    private void cpmwheel$handPre(CallbackInfo ci) { HandGlow.inHand = true; }
+    private void cpmwheel$handPre(CallbackInfo ci) { HandGlow.inHand = true; HandGlow.hookFired("ClientBase.renderHand"); }
 
     @Inject(method = "renderHandPost", at = @At("HEAD"), require = 0, remap = false)
     private void cpmwheel$handPost(CallbackInfo ci) { HandGlow.inHand = false; }
