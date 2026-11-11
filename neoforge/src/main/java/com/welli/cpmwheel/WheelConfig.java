@@ -196,7 +196,7 @@ public class WheelConfig {
     public String centerMode = "player";
     /** center size in percent (50-200) */
     public int centerSize = 100;
-    public int configVersion = 11;
+    public int configVersion = 12;
     private static final String LEGACY_DESIGN = "signalis";
     /** HUD grouped by wheel/folder with nested bars; false = flat list */
     public boolean hudGrouped = true;
@@ -227,6 +227,10 @@ public class WheelConfig {
     public List<String> handAnimOff = new ArrayList<>();
     /** 1.5.2: other mods whose compat rules are ignored (HandAnim.MODS keys) */
     public List<String> haIgnore = new ArrayList<>();
+    /** 1.5.3: item in the fist: per-category user offsets {x,y,z,scale,rx,ry,rz}, vanilla item position fallback, blocks with 1 or 2 hands */
+    public java.util.Map<String, int[]> haAdj = new java.util.HashMap<>();
+    public boolean haVanillaItem = false;
+    public boolean haTwoHandBlock = false;
     public int haIntensity = 100, haIdle = 100, haBob = 100, haInertia = 100, haPose = 100, haSwing = 100;
     public boolean frameSegments = true;
     public boolean hudEnabled = true;
@@ -275,6 +279,7 @@ public class WheelConfig {
                         c.configVersion = 4;
                     }
                     if (c.configVersion < 7) c.innerRing = false; // 1.4.4: center ring off once on upgrade
+                    if (c.configVersion < 12) { c.configVersion = 12; c.haTwoHandBlock = false; } // 1.5.3: blocks held with one hand by default
                     if (c.configVersion < 11) c.configVersion = 11; // 1.5.0: hand animations (new fields, defaults on, set in fixup)
                     if (c.configVersion < 10) c.configVersion = 10; // 1.4.7: handGlow (default auto, set in fixup) // 1.4.6: group members -> actions (fixup), keybinds, conditional slots // 1.4.5: group slots (new fields, default none)
                     if (c.configVersion < 6) c.configVersion = 6; // 1.4.2: design id rename + per-slot displayMode (defaults to "") handled in fixup()
@@ -314,6 +319,8 @@ public class WheelConfig {
         if (!java.util.Arrays.asList(HandGlow.MODES).contains(handGlow)) handGlow = "auto";
         if (handAnimOff == null) handAnimOff = new ArrayList<>();
         if (haIgnore == null) haIgnore = new ArrayList<>();
+        if (haAdj == null) haAdj = new java.util.HashMap<>();
+        haAdj.entrySet().removeIf(e -> e.getKey() == null || e.getValue() == null || e.getValue().length != 7 || java.util.Arrays.asList(HandAnim.CATS).indexOf(e.getKey()) < 0);
         handAnimOff.removeIf(f -> f == null || HandAnim.fi(f) < 0);
         haIntensity = clamp(haIntensity, 0, 200); haIdle = clamp(haIdle, 0, 200); haBob = clamp(haBob, 0, 200);
         haInertia = clamp(haInertia, 0, 200); haPose = clamp(haPose, 0, 200); haSwing = clamp(haSwing, 0, 200);

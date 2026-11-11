@@ -48,7 +48,9 @@ public class HandAnimScreen extends Screen {
         slider(x2, y, "cpmwheel.ha.int.inertia", cfg.haInertia, v -> cfg.haInertia = v); y += 22;
         slider(x2, y, "cpmwheel.ha.int.pose", cfg.haPose, v -> cfg.haPose = v); y += 22;
         slider(x2, y, "cpmwheel.ha.int.swing", cfg.haSwing, v -> cfg.haSwing = v); y += 22;
-        int iy = y + 22 * 3 + 4;
+        int iy = y + 22 * 2 + 4;
+        addRenderableWidget(Button.builder(Component.translatable("cpmwheel.ha.adjust"), b -> minecraft.setScreen(new ItemAdjustScreen(this, cfg))).bounds(x2, iy, 150, 20).build());
+        iy += 22;
         for (int m = 0; m < HandAnim.MODS.length; m++) {
             if (!HandAnim.modLoaded[m]) continue;
             String key = HandAnim.MODS[m][0];

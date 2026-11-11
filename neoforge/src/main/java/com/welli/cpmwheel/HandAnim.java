@@ -27,7 +27,7 @@ public final class HandAnim {
     private static final Logger LOG = LoggerFactory.getLogger("cpmwheel");
 
     // ---- settings snapshot ----
-    public static final String[] FEATURES = {"idle", "bob", "inertia", "jump", "sneak", "swap", "poses", "swing", "eat", "swim", "arm", "carry", "lantern"};
+    public static final String[] FEATURES = {"idle", "bob", "inertia", "jump", "sneak", "swap", "poses", "swing", "eat", "swim", "arm", "lantern"};
     static volatile boolean master = true;
     static final boolean[] on = new boolean[FEATURES.length];
     static { java.util.Arrays.fill(on, true); }
@@ -54,6 +54,9 @@ public final class HandAnim {
         for (int i = 0; i < FEATURES.length; i++) on[i] = !c.handAnimOff.contains(FEATURES[i]);
         gI = c.haIntensity / 100f; bobI = c.haBob / 100f; inerI = c.haInertia / 100f;
         poseI = c.haPose / 100f; swingI = c.haSwing / 100f; idleI = c.haIdle / 100f;
+        int[][] na = new int[CATS.length][7];
+        for (int i = 0; i < CATS.length; i++) { int[] v = c.haAdj.get(CATS[i]); if (v != null && v.length == 7) na[i] = v.clone(); }
+        adj = na; vanillaItem = c.haVanillaItem; twoHandBlock = c.haTwoHandBlock;
         if (!c.haIgnore.equals(ignored)) { ignored = java.util.List.copyOf(c.haIgnore); recompute(true); }
     }
     static int fi(String f) { for (int i = 0; i < FEATURES.length; i++) if (FEATURES[i].equals(f)) return i; return -1; }
@@ -73,7 +76,7 @@ public final class HandAnim {
         StringBuilder sb = new StringBuilder();
         if (active("hmi")) { all = true; note(sb, "Hold My Items: all"); }
         if (active("fpm")) { all = true; note(sb, "First Person Model: all"); }
-        if (active("realcamera")) { block("arm", "carry", "bob", "inertia", "jump", "sneak", "swim", "idle"); note(sb, "Real Camera: arm/carry/idle/bob/inertia/jump/sneak/swim"); }
+        if (active("realcamera")) { block("arm", "bob", "inertia", "jump", "sneak", "swim", "idle"); note(sb, "Real Camera: arm/idle/bob/inertia/jump/sneak/swim"); }
         if (active("bettercombat")) { bcCompat = true; note(sb, "Better Combat: swing variations pause during BC attacks"); }
         if (active("eating")) { block("eat"); note(sb, "Eating Animation: eat"); }
         allBlocked = all;
@@ -145,6 +148,7 @@ public final class HandAnim {
     // ---- per-frame state (render thread = client thread) ----
     private static long lastNs = 0, frame = 0;
     private static float sYaw = Float.NaN, sPitch, sneakW, swimW, climbW;
+    private static float swimPhase, climbPhase;
     private static float pYaw, pPitch, lanZ, lanX, lanVZ, lanVX; // lantern pendulum
     private static final float[][] pose = new float[2][6];
     private static PoseStack.Pose savedFor; private static long savedFrame = -1;
@@ -190,6 +194,10 @@ public final class HandAnim {
             lanZ = Mth.clamp(lanZ, -45, 45); lanX = Mth.clamp(lanX, -45, 45);
         }
         pYaw = yaw; pPitch = pitch;
+        // stroke phases: tied to swim speed / climb speed
+        net.minecraft.world.phys.Vec3 mv = p.getDeltaMovement();
+        swimPhase = (swimPhase + dt * (0.45f + (float) mv.length() * 6f)) % 1f;
+        climbPhase = (climbPhase + dt * (0.5f + (float) Math.abs(mv.y) * 12f)) % 1f;
         // per-hand category pose blend
         for (int hi = 0; hi < 2; hi++) {
             float[] tgt = target(p, hi == 0 ? InteractionHand.MAIN_HAND : InteractionHand.OFF_HAND);
@@ -219,12 +227,12 @@ public final class HandAnim {
     }
 
     /** apply to the hand PoseStack; called from the loader's RenderHandEvent for each hand */
-    public static void apply(PoseStack ps, InteractionHand hand, ItemStack stack, float pt, float swing, float equip, MultiBufferSource buf, int light) {
+    public static boolean apply(PoseStack ps, InteractionHand hand, ItemStack stack, float pt, float swing, float equip, MultiBufferSource buf, int light) {
         lastHandMs = System.currentTimeMillis();
         if (!logHand) { logHand = true; LOG.info("[cpmwheel] hand animations: stage 3 hand event received (master=" + master + ", allBlocked=" + allBlocked + ", failed=" + failed + ")"); }
-        if (!master || allBlocked || failed) return;
+        if (!master || allBlocked || failed) return false;
         Minecraft mc = Minecraft.getInstance(); LocalPlayer p = mc.player;
-        if (p == null || Float.isNaN(sYaw)) return;
+        if (p == null || Float.isNaN(sYaw)) return false;
         try {
             // undo what we did to the other hand this frame (vanilla does not push between hands)
             PoseStack.Pose last = ps.last();
@@ -272,69 +280,70 @@ public final class HandAnim {
                 else if (ua == UseAnim.DRINK) { rx -= Math.min(1f, u / 8f) * 8f * G; }
             }
             if (f(9)) {
-                if (swimW > 0.01f) { ty -= 0.04f * swimW * G; rx += Mth.sin(t * 0.15f) * 6f * swimW * G; rz += Mth.sin(t * 0.15f) * 4f * side * swimW * G; }
-                if (climbW > 0.01f) ty += Mth.sin(t * 0.4f + (right ? 0 : (float) Math.PI)) * 0.04f * climbW * G;
+                // both arms: the empty off-hand arm is not drawn by vanilla, so the main-hand pass draws it too
+                if ((swimW > 0.05f || climbW > 0.05f) && hand == InteractionHand.MAIN_HAND && p.getOffhandItem().isEmpty() && buf != null && !p.isInvisible()) {
+                    ps.pushPose(); stroke(ps, -side, G); armChain(ps, -side, 0, 0); drawArm(ps, p, buf, light, !right); ps.popPose();
+                }
+                stroke(ps, side, G);
             }
             if (tx != 0 || ty != 0 || tz != 0) ps.translate(tx, ty, tz);
             if (ry != 0) ps.mulPose(Axis.YP.rotationDegrees(ry));
             if (rx != 0) ps.mulPose(Axis.XP.rotationDegrees(rx));
             if (rz != 0) ps.mulPose(Axis.ZP.rotationDegrees(rz));
-            heldExtras(ps, p, hand, stack, swing, equip, buf, light, side, right);
+            return heldExtras(ps, p, hand, stack, swing, equip, buf, light, right);
         } catch (Throwable th) {
             if (!loggedErr) { loggedErr = true; LOG.warn("[cpmwheel] hand animation error (disabled for this session)", th); }
             failed = true;
         }
+        return false;
     }
     private static boolean loggedErr, logArm;
 
-    // ---- arm visible with items, two-handed carry, lantern/torch hold ----
-    // the vanilla empty-hand arm ends ~(0.72,-0.51,-1.09) in view space; vanilla items sit ~(0.6,-0.4,-0.7):
-    // move the arm half-way up/in and the item half-way down/out so the item ends up in the fist.
-    private static final float ARM_DX = -0.06f, ARM_DY = 0.05f, ARM_DZ = 0.2f, ITEM_DX = 0.06f, ITEM_DY = -0.05f, ITEM_DZ = -0.19f;
+    // ---- arm visible with items: we draw arm + item ourselves, item seated in the arm's fist ----
+    public static final String[] CATS = {"sword", "axe", "tool", "bow", "crossbow", "trident", "shield", "block", "food", "lantern", "torch", "other"};
+    /** built-in per-category base {x, y, z (1/100 block), scale %, rotX, rotY, rotZ (deg)}; user offsets from config are added */
+    private static final int[][] BASE = {
+            {0, 0, 0, 90, 0, 0, 0},      // sword   (third-person grip, blade tilted up/forward)
+            {0, 0, 0, 90, 0, 0, 0},      // axe
+            {0, 0, 0, 90, 0, 0, 0},      // tool
+            {0, 0, 0, 90, 0, 0, 0},      // bow     (third-person bow pose = vertical in the fist)
+            {0, 0, 0, 90, 0, 0, 0},      // crossbow
+            {0, 0, 0, 90, 0, 0, 0},      // trident
+            {0, 0, 0, 80, 0, 0, 0},      // shield
+            {0, 4, 0, 100, 0, 0, 0},     // block   (upright, small, just above the fist)
+            {0, 0, 0, 90, 0, 0, 0},      // food
+            {0, 0, 0, 45, 0, 0, 0},      // lantern (block model, hanging)
+            {0, 0, 0, 55, 0, 0, 0},      // torch   (block model, upright)
+            {0, 0, 0, 90, 0, 0, 0}};     // other
+    static volatile int[][] adj = new int[CATS.length][7];
+    static volatile boolean vanillaItem = false, twoHandBlock = false;
 
-    private static void heldExtras(PoseStack ps, LocalPlayer p, InteractionHand hand, ItemStack stack, float swing, float equip,
-                                   MultiBufferSource buf, int light, float side, boolean right) {
-        if (stack.isEmpty() || buf == null) return;
-        Item it = stack.getItem();
-        if (it instanceof MapItem) return; // vanilla already draws arms with maps
-        boolean usingThis = p.isUsingItem() && p.getUsedItemHand() == hand;
-        if (f(10) && !p.isInvisible() && !usingThis) {
-            ps.pushPose();
-            ps.translate(ARM_DX * side, ARM_DY, ARM_DZ);
-            renderArm(ps, p, buf, light, right, swing, equip);
-            ps.popPose();
-            // two-handed carry: block in main hand, empty off hand -> other arm comes in under it
-            if (f(11) && hand == InteractionHand.MAIN_HAND && it instanceof BlockItem && p.getOffhandItem().isEmpty()) {
-                ps.pushPose();
-                ps.translate(-side * 0.42f, ARM_DY - 0.02f, ARM_DZ);
-                ps.mulPose(Axis.YP.rotationDegrees(-side * 18f));
-                renderArm(ps, p, buf, light, !right, 0, equip);
-                ps.popPose();
-            }
-            ps.translate(ITEM_DX * side, ITEM_DY, ITEM_DZ);
+    static int cat(ItemStack s) {
+        Item it = s.getItem();
+        if (it instanceof SwordItem) return 0;
+        if (it instanceof AxeItem) return 1;
+        if (it instanceof DiggerItem) return 2;
+        if (it instanceof BowItem) return 3;
+        if (it instanceof CrossbowItem) return 4;
+        if (it instanceof TridentItem) return 5;
+        if (it instanceof ShieldItem) return 6;
+        if (it instanceof BlockItem bi) {
+            if (bi.getBlock() instanceof net.minecraft.world.level.block.LanternBlock) return 9;
+            if (BuiltInRegistries.ITEM.getKey(it).getPath().contains("torch")) return 10;
+            return 7;
         }
-        if (f(12) && !usingThis) {
-            String path = BuiltInRegistries.ITEM.getKey(it).getPath();
-            if (path.contains("lantern")) {           // hangs from the fist and swings
-                ps.translate(0, 0.08f, 0);
-                ps.mulPose(Axis.ZP.rotationDegrees(lanZ * side * 0.6f));
-                ps.mulPose(Axis.XP.rotationDegrees(lanX * 0.6f));
-                ps.translate(0, -0.08f, 0);
-            } else if (path.contains("torch")) {      // held upright and a bit forward
-                ps.translate(0, 0.02f, -0.03f);
-                ps.mulPose(Axis.XP.rotationDegrees(-8f));
-                ps.mulPose(Axis.ZP.rotationDegrees(lanZ * side * 0.15f));
-            }
-        }
+        UseAnim ua = s.getUseAnimation();
+        if (ua == UseAnim.EAT || ua == UseAnim.DRINK) return 8;
+        return 11;
     }
 
-    /** vanilla-style first-person arm (same maths as the empty-hand arm), drawn through PlayerRenderer so CPM's hand hooks run */
-    private static void renderArm(PoseStack ps, LocalPlayer p, MultiBufferSource buf, int light, boolean right, float swing, float equip) {
-        if (!(Minecraft.getInstance().getEntityRenderDispatcher().getRenderer(p) instanceof PlayerRenderer pr)) return;
-        float f = right ? 1 : -1;
+    private static final org.joml.Matrix4f TMP = new org.joml.Matrix4f();
+    private static final org.joml.Vector3f FIST = new org.joml.Vector3f();
+
+    /** vanilla empty-hand arm chain (on screen, natural position) */
+    private static void armChain(PoseStack ps, float f, float swing, float equip) {
         float g = Mth.sqrt(swing);
         float h = -0.3f * Mth.sin(g * (float) Math.PI), i = 0.4f * Mth.sin(g * (float) Math.PI * 2), j = -0.4f * Mth.sin(swing * (float) Math.PI);
-        ps.pushPose();
         ps.translate(f * (h + 0.64f), i - 0.6f + equip * -0.6f, j - 0.72f);
         ps.mulPose(Axis.YP.rotationDegrees(f * 45f));
         float k = Mth.sin(swing * swing * (float) Math.PI), l = Mth.sin(g * (float) Math.PI);
@@ -345,9 +354,112 @@ public final class HandAnim {
         ps.mulPose(Axis.XP.rotationDegrees(200f));
         ps.mulPose(Axis.YP.rotationDegrees(f * -135f));
         ps.translate(f * 5.6f, 0f, 0f);
+    }
+
+    /** fist position (where third-person items are held) relative to the current frame, for this arm pose */
+    private static org.joml.Vector3f fist(float f, float swing, float equip) {
+        PoseStack t = new PoseStack();
+        armChain(t, f, swing, equip);
+        // arm ModelPart pivot (+-5, 2, 0) px, then vanilla's held-item offset (1/16, 2/16, -10/16) in the arm frame
+        t.translate(f * -5f / 16f, 2f / 16f, 0);
+        t.mulPose(Axis.XP.rotationDegrees(-90f));
+        t.mulPose(Axis.YP.rotationDegrees(180f));
+        t.translate(f / 16f, 0.125f, -0.625f);
+        t.last().pose().getNormalizedRotation(GRIP);
+        // blade direction in third person = arm-frame forward; tilt the whole grip so it points up/forward like a held tool
+        org.joml.Vector3f blade = GRIP.transform(new org.joml.Vector3f(0, 1, 0));
+        org.joml.Vector3f want = new org.joml.Vector3f(-0.2f * f, 0.8f, -0.55f).normalize();
+        new org.joml.Quaternionf().rotationTo(blade, want).mul(GRIP, GRIP);
+        return t.last().pose().transformPosition(0, 0, 0, FIST);
+    }
+    private static final org.joml.Quaternionf GRIP = new org.joml.Quaternionf();
+
+    /** returns true when we drew the hand ourselves (caller cancels the vanilla hand) */
+    private static boolean heldExtras(PoseStack ps, LocalPlayer p, InteractionHand hand, ItemStack stack, float swing, float equip,
+                                      MultiBufferSource buf, int light, boolean right) {
+        if (stack.isEmpty() || buf == null || !f(10) || p.isInvisible()) return false;
+        Item it = stack.getItem();
+        if (it instanceof MapItem) return false;                                       // vanilla draws arms with maps
+        if (p.isUsingItem() && p.getUsedItemHand() == hand) return false;              // bow draw, eating, shield block: vanilla
+        if (it instanceof CrossbowItem && CrossbowItem.isCharged(stack)) return false; // aiming pose: vanilla
+        float f = right ? 1 : -1;
+        if (vanillaItem) {                                                             // our arm, vanilla item position
+            ps.pushPose(); armChain(ps, f, swing, equip); drawArm(ps, p, buf, light, right); ps.popPose();
+            return false;
+        }
+        int c = cat(stack);
+        boolean two = c == 7 && twoHandBlock && hand == InteractionHand.MAIN_HAND && p.getOffhandItem().isEmpty();
+        ps.pushPose(); armChain(ps, f, swing, equip); drawArm(ps, p, buf, light, right); ps.popPose();
+        if (two) { ps.pushPose(); armChain(ps, -f, 0, equip); drawArm(ps, p, buf, light, !right); ps.popPose(); }
+
+        org.joml.Vector3f fp = fist(f, swing, equip);
+        int[] b = BASE[c], a = adj[c];
+        ps.pushPose();
+        ps.translate(fp.x + f * (b[0] + a[0]) / 100f, fp.y + (b[1] + a[1]) / 100f, fp.z + (b[2] + a[2]) / 100f);
+        if (two) ps.translate(-f * 0.45f, 0.05f, 0);                                   // between both fists
+        float sc = Math.max(0.05f, (b[3] + a[3]) / 100f);
+        // attack: quick chop of the item around the fist, plus our user rotations
+        float sw = Mth.sin(Mth.sqrt(swing) * (float) Math.PI);
+        if (sw != 0) ps.mulPose(Axis.XP.rotationDegrees(-45f * sw));
+        if (b[5] + a[5] != 0) ps.mulPose(Axis.YP.rotationDegrees(f * (b[5] + a[5])));
+        if (b[4] + a[4] != 0) ps.mulPose(Axis.XP.rotationDegrees(b[4] + a[4]));
+        if (b[6] + a[6] != 0) ps.mulPose(Axis.ZP.rotationDegrees(f * (b[6] + a[6])));
+        if (c == 9 || c == 10) {
+            net.minecraft.world.level.block.state.BlockState st = ((BlockItem) it).getBlock().defaultBlockState();
+            if (c == 9) {
+                if (st.hasProperty(net.minecraft.world.level.block.LanternBlock.HANGING)) st = st.setValue(net.minecraft.world.level.block.LanternBlock.HANGING, true);
+                if (f(11)) { ps.mulPose(Axis.ZP.rotationDegrees(lanZ * f * 0.8f)); ps.mulPose(Axis.XP.rotationDegrees(lanX * 0.8f)); }
+                ps.scale(sc, sc, sc);
+                ps.translate(-0.5f, -1.0f, -0.5f);   // chain top at the fist, lantern hangs below
+            } else {
+                if (f(11)) ps.mulPose(Axis.ZP.rotationDegrees(lanZ * f * 0.15f));
+                ps.mulPose(Axis.XP.rotationDegrees(-10f));
+                ps.scale(sc, sc, sc);
+                ps.translate(-0.5f, -0.25f, -0.5f);  // grip a quarter up the stick
+            }
+            Minecraft.getInstance().getBlockRenderer().renderSingleBlock(st, ps, buf, light, net.minecraft.client.renderer.texture.OverlayTexture.NO_OVERLAY);
+        } else if (c == 7) {                         // blocks: upright, small, vanilla first-person block pose
+            ps.scale(sc, sc, sc);
+            Minecraft.getInstance().getEntityRenderDispatcher().getItemInHandRenderer().renderItem(p, stack,
+                    right ? net.minecraft.world.item.ItemDisplayContext.FIRST_PERSON_RIGHT_HAND : net.minecraft.world.item.ItemDisplayContext.FIRST_PERSON_LEFT_HAND,
+                    !right, ps, buf, light);
+        } else {                                     // everything else: held like third person, grip in the fist
+            ps.mulPose(new org.joml.Quaternionf(GRIP));
+            ps.scale(sc, sc, sc);
+            Minecraft.getInstance().getEntityRenderDispatcher().getItemInHandRenderer().renderItem(p, stack,
+                    right ? net.minecraft.world.item.ItemDisplayContext.THIRD_PERSON_RIGHT_HAND : net.minecraft.world.item.ItemDisplayContext.THIRD_PERSON_LEFT_HAND,
+                    !right, ps, buf, light);
+        }
+        ps.popPose();
+        if (!logItem) { logItem = true; LOG.info("[cpmwheel] hand animations: stage 6 item drawn in fist (cat=" + CATS[c] + ", fist=" + fp + ")"); }
+        return true;
+    }
+    private static boolean logItem;
+
+    /** swim breaststroke / climb hand-over-hand offset for one arm (side = +1 right, -1 left) */
+    private static void stroke(PoseStack ps, float side, float G) {
+        float x = 0, y = 0, z = 0, ry = 0, rx = 0;
+        if (swimW > 0.01f) {        // reach forward together, then sweep out to the sides and back
+            float a = swimPhase * (float) Math.PI * 2;
+            float reach = (1 + Mth.cos(a)) / 2, sweep = Math.max(0, Mth.sin(a));
+            x += side * 0.28f * sweep * swimW; y += (0.12f * reach - 0.06f) * swimW; z += (-0.28f * reach + 0.12f * sweep) * swimW;
+            ry += -side * 30f * sweep * swimW; rx += -20f * reach * swimW;
+        }
+        if (climbW > 0.01f) {       // alternate: one hand reaches up while the other pulls down
+            float a = (climbPhase + (side > 0 ? 0 : 0.5f)) * (float) Math.PI * 2;
+            float up = (1 + Mth.sin(a)) / 2;
+            y += (0.32f * up - 0.12f) * climbW; z += -0.12f * up * climbW; rx += -35f * up * climbW;
+        }
+        x *= G; y *= G; z *= G; ry *= G; rx *= G;
+        if (x != 0 || y != 0 || z != 0) ps.translate(x, y, z);
+        if (ry != 0) ps.mulPose(Axis.YP.rotationDegrees(ry));
+        if (rx != 0) ps.mulPose(Axis.XP.rotationDegrees(rx));
+    }
+
+    private static void drawArm(PoseStack ps, LocalPlayer p, MultiBufferSource buf, int light, boolean right) {
+        if (!(Minecraft.getInstance().getEntityRenderDispatcher().getRenderer(p) instanceof PlayerRenderer pr)) return;
         AbstractClientPlayer ap = p;
         if (!logArm) { logArm = true; LOG.info("[cpmwheel] hand animations: stage 5 arm-with-item drawn via " + pr.getClass().getName()); }
         if (right) pr.renderRightHand(ps, buf, light, ap); else pr.renderLeftHand(ps, buf, light, ap);
-        ps.popPose();
     }
 }
