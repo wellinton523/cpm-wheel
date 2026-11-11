@@ -196,7 +196,7 @@ public class WheelConfig {
     public String centerMode = "player";
     /** center size in percent (50-200) */
     public int centerSize = 100;
-    public int configVersion = 13;
+    public int configVersion = 14;
     private static final String LEGACY_DESIGN = "signalis";
     /** HUD grouped by wheel/folder with nested bars; false = flat list */
     public boolean hudGrouped = true;
@@ -231,6 +231,9 @@ public class WheelConfig {
     public java.util.Map<String, int[]> haAdj = new java.util.HashMap<>();
     public boolean haVanillaItem = false;
     public boolean haTwoHandBlock = false;
+    /** 1.5.5: per-item ("ns:id|main/off") and per-mod ("mod:ns|main/off") overrides {x,y,z,scale,rx,ry,rz}; priority item > mod > category */
+    public java.util.Map<String, int[]> haItem = new java.util.HashMap<>();
+    public boolean haItemOn = true;
     /** 1.5.4: categories drawn 2D (flat item) instead of 3D (lantern, torch, block each separate); arm adjust per hand */
     public List<String> haFlat = new ArrayList<>();
     public java.util.Map<String, int[]> haArm = new java.util.HashMap<>();
@@ -282,6 +285,7 @@ public class WheelConfig {
                         c.configVersion = 4;
                     }
                     if (c.configVersion < 7) c.innerRing = false; // 1.4.4: center ring off once on upgrade
+                    if (c.configVersion < 14) { c.configVersion = 14; c.haItemOn = true; } // 1.5.5: per-item/per-mod overrides + flatblock category
                     if (c.configVersion < 13) c.configVersion = 13; // 1.5.4: haFlat + haArm (new fields, empty = defaults)
                     if (c.configVersion < 12) { c.configVersion = 12; c.haTwoHandBlock = false; } // 1.5.3: blocks held with one hand by default
                     if (c.configVersion < 11) c.configVersion = 11; // 1.5.0: hand animations (new fields, defaults on, set in fixup)
@@ -325,6 +329,8 @@ public class WheelConfig {
         if (haIgnore == null) haIgnore = new ArrayList<>();
         if (haAdj == null) haAdj = new java.util.HashMap<>();
         if (haFlat == null) haFlat = new ArrayList<>();
+        if (haItem == null) haItem = new java.util.HashMap<>();
+        haItem.entrySet().removeIf(e -> e.getKey() == null || !(e.getKey().endsWith("|main") || e.getKey().endsWith("|off")) || e.getValue() == null || e.getValue().length != 7);
         haFlat.removeIf(k -> k == null || java.util.Arrays.asList(HandAnim.CATS).indexOf(k) < 0);
         if (haArm == null) haArm = new java.util.HashMap<>();
         haArm.entrySet().removeIf(e -> !("main".equals(e.getKey()) || "off".equals(e.getKey())) || e.getValue() == null || e.getValue().length != 7);

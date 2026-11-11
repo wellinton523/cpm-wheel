@@ -239,5 +239,14 @@
   "cpmwheel.arm.rz": "Rotate Z: %s°",
   "cpmwheel.arm.scale": "Size: %s%%",
   "cpmwheel.adj.r3d": "Render: 3D",
-  "cpmwheel.adj.r2d": "Render: 2D"
+  "cpmwheel.adj.r2d": "Render: 2D",
+  "cpmwheel.ha.items": "Items and mods...",
+  "cpmwheel.io.title": "Per item / mod adjust",
+  "cpmwheel.io.modeitem": "Mode: item",
+  "cpmwheel.io.modemod": "Mode: whole mod",
+  "cpmwheel.io.search": "search id (e.g. poppy)",
+  "cpmwheel.io.held": "Use held item",
+  "cpmwheel.io.enabled": "Item/mod overrides: %s",
+  "cpmwheel.io.pick": "pick an item or mod",
+  "cpmwheel.adj.c.flatblock": "flat block (flower, door...)"
 }

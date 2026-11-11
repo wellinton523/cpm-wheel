@@ -56,6 +56,7 @@ public final class HandAnim {
         poseI = c.haPose / 100f; swingI = c.haSwing / 100f; idleI = c.haIdle / 100f;
         int[][] na = new int[CATS.length][7];
         for (int i = 0; i < CATS.length; i++) { int[] v = c.haAdj.get(CATS[i]); if (v != null && v.length == 7) na[i] = v.clone(); }
+        loadItems(c);
         adj = na; vanillaItem = c.haVanillaItem; twoHandBlock = c.haTwoHandBlock;
         boolean[] fl = new boolean[CATS.length]; for (int i = 0; i < CATS.length; i++) fl[i] = c.haFlat.contains(CATS[i]); flatCats = fl;
         int[][] am = new int[2][7];
@@ -307,7 +308,7 @@ public final class HandAnim {
     private static boolean loggedErr, logArm;
 
     // ---- arm visible with items: we draw arm + item ourselves, item seated in the arm's fist ----
-    public static final String[] CATS = {"sword", "axe", "tool", "bow", "crossbow", "trident", "shield", "block", "food", "lantern", "torch", "other"};
+    public static final String[] CATS = {"sword", "axe", "tool", "bow", "crossbow", "trident", "shield", "block", "food", "lantern", "torch", "other", "flatblock"};
     /** built-in per-category base {x, y, z (1/100 block), scale %, rotX, rotY, rotZ (deg)}; user offsets from config are added */
     private static final int[][] BASE = {
             {0, 0, 0, 90, 0, 0, 0},      // sword   (third-person grip, blade tilted up/forward)
@@ -321,10 +322,11 @@ public final class HandAnim {
             {0, 0, 0, 90, 0, 0, 0},      // food
             {0, 0, 0, 45, 0, 0, 0},      // lantern (block model, hanging)
             {0, 0, 0, 55, 0, 0, 0},      // torch   (block model, upright)
-            {0, 0, 0, 90, 0, 0, 0}};     // other
+            {0, 0, 0, 90, 0, 0, 0},      // other
+            {0, 1, 0, 80, 0, 0, 0}};     // flatblock (flowers, doors, saplings, rails, panes...): held like an item, grip in the fist
     static volatile int[][] adj = new int[CATS.length][7];
     static volatile boolean vanillaItem = false, twoHandBlock = false;
-    static volatile boolean[] flatCats = new boolean[12];
+    static volatile boolean[] flatCats = new boolean[13];
     /** arm adjust {x,y,z (1/100 block), rx,ry,rz (deg), scale % offset} for main [0] and off hand [1] */
     static volatile int[][] arm = new int[2][7];
 
@@ -344,6 +346,41 @@ public final class HandAnim {
     }
     private static void restoreSaved(PoseStack ps) { ps.last().pose().set(savedPose); ps.last().normal().set(savedNormal); }
 
+    /** block items whose item model is a flat sprite (not gui3d): cached per item */
+    private static final java.util.Map<Item, Boolean> FLAT = new java.util.IdentityHashMap<>();
+    static boolean flatModel(ItemStack s) {
+        Boolean r = FLAT.get(s.getItem());
+        if (r == null) {
+            try { r = !Minecraft.getInstance().getItemRenderer().getModel(s, null, null, 0).isGui3d(); }
+            catch (Throwable t) { r = false; }
+            if (FLAT.size() > 4096) FLAT.clear();
+            FLAT.put(s.getItem(), r);
+        }
+        return r;
+    }
+
+    // ---- per-item overrides {x,y,z,scale,rx,ry,rz} per hand, added on top of the category values ----
+    static volatile boolean itemOverrides = true;
+    static volatile java.util.Map<Item, int[][]> ITEM_ADJ = java.util.Map.of();
+    static volatile java.util.Map<String, int[][]> MOD_ADJ = java.util.Map.of();
+    static void loadItems(WheelConfig c) {
+        java.util.Map<Item, int[][]> m = new java.util.IdentityHashMap<>();
+        java.util.Map<String, int[][]> mods = new java.util.HashMap<>();
+        for (var e : c.haItem.entrySet()) {
+            String k = e.getKey(); int bar = k.lastIndexOf('|');
+            if (bar < 0 || e.getValue() == null || e.getValue().length != 7) continue;
+            if (k.startsWith("mod:")) {
+                mods.computeIfAbsent(k.substring(4, bar), x -> new int[2][])["off".equals(k.substring(bar + 1)) ? 1 : 0] = e.getValue().clone();
+                continue;
+            }
+            net.minecraft.resources.ResourceLocation rl = net.minecraft.resources.ResourceLocation.tryParse(k.substring(0, bar));
+            if (rl == null || !BuiltInRegistries.ITEM.containsKey(rl)) continue;
+            Item it = BuiltInRegistries.ITEM.get(rl);
+            m.computeIfAbsent(it, x -> new int[2][])["off".equals(k.substring(bar + 1)) ? 1 : 0] = e.getValue().clone();
+        }
+        ITEM_ADJ = m; MOD_ADJ = mods; itemOverrides = c.haItemOn;
+    }
+
     static int cat(ItemStack s) {
         Item it = s.getItem();
         if (it instanceof SwordItem) return 0;
@@ -356,7 +393,7 @@ public final class HandAnim {
         if (it instanceof BlockItem bi) {
             if (bi.getBlock() instanceof net.minecraft.world.level.block.LanternBlock) return 9;
             if (BuiltInRegistries.ITEM.getKey(it).getPath().contains("torch")) return 10;
-            return 7;
+            return flatModel(s) ? 12 : 7;
         }
         UseAnim ua = s.getUseAnimation();
         if (ua == UseAnim.EAT || ua == UseAnim.DRINK) return 8;
@@ -419,7 +456,17 @@ public final class HandAnim {
         if (two) { ps.pushPose(); armAdjust(ps, false, -f); armChain(ps, -f, 0, equip); drawArm(ps, p, buf, light, !right); ps.popPose(); }
 
         org.joml.Vector3f fp = fist(f, swing, equip);
-        int[] b = BASE[c], a = adj[c];
+        int[] b = BASE[c], a = adj[c].clone();
+        if (itemOverrides) {
+            int hi = hand == InteractionHand.MAIN_HAND ? 0 : 1;
+            int[][] io = ITEM_ADJ.get(it);
+            int[] o = io == null ? null : io[hi];                    // priority: item > mod > category
+            if (o == null && !MOD_ADJ.isEmpty()) {
+                int[][] mo = MOD_ADJ.get(BuiltInRegistries.ITEM.getKey(it).getNamespace());
+                o = mo == null ? null : mo[hi];
+            }
+            if (o != null) for (int q = 0; q < 7; q++) a[q] += o[q];
+        }
         ps.pushPose();
         ps.translate(fp.x + f * (b[0] + a[0]) / 100f, fp.y + (b[1] + a[1]) / 100f, fp.z + (b[2] + a[2]) / 100f);
         if (two) ps.translate(-f * 0.45f, 0.05f, 0);                                   // between both fists

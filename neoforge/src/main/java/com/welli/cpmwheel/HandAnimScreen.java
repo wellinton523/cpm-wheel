@@ -51,6 +51,8 @@ public class HandAnimScreen extends Screen {
         int iy = y + 22 * 2 + 4;
         addRenderableWidget(Button.builder(Component.translatable("cpmwheel.ha.adjust"), b -> minecraft.setScreen(new ItemAdjustScreen(this, cfg))).bounds(x2, iy, 150, 20).build());
         iy += 22;
+        addRenderableWidget(Button.builder(Component.translatable("cpmwheel.ha.items"), b -> minecraft.setScreen(new ItemOverrideScreen(this, cfg))).bounds(x2, iy, 150, 20).build());
+        iy += 22;
         addRenderableWidget(Button.builder(Component.translatable("cpmwheel.ha.armadj"), b -> minecraft.setScreen(new ArmAdjustScreen(this, cfg))).bounds(x2, iy, 150, 20).build());
         iy += 22;
         for (int m = 0; m < HandAnim.MODS.length; m++) {
