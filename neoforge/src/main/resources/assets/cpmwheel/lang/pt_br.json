@@ -187,5 +187,8 @@
   "cpmwheel.ha.int.bob": "Balanço: %s%%",
   "cpmwheel.ha.int.inertia": "Inércia: %s%%",
   "cpmwheel.ha.int.pose": "Poses: %s%%",
-  "cpmwheel.ha.int.swing": "Ataque: %s%%"
+  "cpmwheel.ha.int.swing": "Ataque: %s%%",
+  "cpmwheel.ha.f.arm": "Braço visível c/ item",
+  "cpmwheel.ha.f.carry": "Bloco com 2 mãos",
+  "cpmwheel.ha.f.lantern": "Lanterna/tocha"
 }

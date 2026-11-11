@@ -187,5 +187,8 @@
   "cpmwheel.ha.int.bob": "Bob: %s%%",
   "cpmwheel.ha.int.inertia": "Inertia: %s%%",
   "cpmwheel.ha.int.pose": "Poses: %s%%",
-  "cpmwheel.ha.int.swing": "Attack: %s%%"
+  "cpmwheel.ha.int.swing": "Attack: %s%%",
+  "cpmwheel.ha.f.arm": "Arm with items",
+  "cpmwheel.ha.f.carry": "Two-hand block carry",
+  "cpmwheel.ha.f.lantern": "Lantern/torch hold"
 }

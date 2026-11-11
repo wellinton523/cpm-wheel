@@ -29,16 +29,17 @@ public class HandAnimScreen extends Screen {
         addRenderableWidget(Button.builder(Component.translatable("cpmwheel.ha.master", onoff(cfg.handAnim)), b -> {
             cfg.handAnim = !cfg.handAnim; HandAnim.load(cfg); rebuildWidgets(); }).bounds(x, y, 304, 20).build());
         y += 24;
-        int yy = y;
+        int yy = y, bx = x;
         for (int i = 0; i < HandAnim.FEATURES.length; i++) {
             String f = HandAnim.FEATURES[i];
             boolean blk = HandAnim.allBlocked || HandAnim.blocked[i];
             Component lbl = Component.translatable("cpmwheel.ha.f." + f).append(": ").append(blk ? Component.translatable("cpmwheel.ha.blocked") : Component.literal(onoff(!cfg.handAnimOff.contains(f))));
             Button btn = Button.builder(lbl, b -> {
                 if (!cfg.handAnimOff.remove(f)) cfg.handAnimOff.add(f);
-                HandAnim.load(cfg); rebuildWidgets(); }).bounds(x, yy, 150, 20).build();
+                HandAnim.load(cfg); rebuildWidgets(); }).bounds(bx, yy, 150, 20).build();
             btn.active = cfg.handAnim && !blk;
             addRenderableWidget(btn); yy += 22;
+            if (i == 9) { yy = y + 22 * 6 + 4; bx = x2; } // HMI-style extras go under the sliders
         }
         slider(x2, y, "cpmwheel.ha.int", cfg.haIntensity, v -> cfg.haIntensity = v); y += 22;
         slider(x2, y, "cpmwheel.ha.int.idle", cfg.haIdle, v -> cfg.haIdle = v); y += 22;
@@ -54,7 +55,7 @@ public class HandAnimScreen extends Screen {
         g.fill(0, 0, width, height, 0xC0050A12);
         g.drawString(font, title, 8, 10, Style.accent(cfg));
         if (!HandAnim.conflictText.isEmpty())
-            g.drawWordWrap(font, Component.translatable("cpmwheel.ha.conflict", HandAnim.conflictText), 162, 26 + 24 + 22 * 6 + 4, Math.max(100, width - 170), 0xFFB347);
+            g.drawWordWrap(font, Component.translatable("cpmwheel.ha.conflict", HandAnim.conflictText), 162, 26 + 24 + 22 * 9 + 8, Math.max(100, width - 170), 0xFFB347);
         super.render(g, mx, my, pt);
     }
 
