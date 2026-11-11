@@ -54,10 +54,17 @@ public class EditScreen extends Screen {
         }).bounds(8 + LIST_W - 22, height - 50, 22, 16).build());
 
         int px = width - 170, y = 30;
-        pageName = new EditBox(font, px, y, 160, 16, Component.literal(""));
+        pageName = new EditBox(font, px, y, 92, 16, Component.literal(""));
         pageName.setValue(cur().name);
         pageName.setResponder(v -> cur().name = v);
-        addRenderableWidget(pageName); y += 20;
+        addRenderableWidget(pageName);
+        WheelConfig.Page cp = cur();
+        addRenderableWidget(Button.builder(Component.literal("\u25A0").withStyle(st -> st.withColor(cp.color)), b -> { // page colour: palette
+            int i = 0; for (; i < WheelConfig.PALETTE.length; i++) if (WheelConfig.PALETTE[i] == cp.color) break;
+            cp.color = WheelConfig.PALETTE[(i + 1) % WheelConfig.PALETTE.length]; rebuildWidgets();
+        }).bounds(px + 94, y - 1, 18, 18).build());
+        addRenderableWidget(hexBox(px + 114, y, String.format("%06X", cp.color & 0xFFFFFF), v -> cp.color = v));
+        y += 20;
         addRenderableWidget(Button.builder(Component.literal("<"), b -> setPage(page - 1)).bounds(px, y, 20, 18).build());
         addRenderableWidget(Button.builder(Component.literal(">"), b -> setPage(page + 1)).bounds(px + 22, y, 20, 18).build());
         addRenderableWidget(Button.builder(Component.translatable("cpmwheel.edit.newpage"), b -> {
@@ -89,7 +96,8 @@ public class EditScreen extends Screen {
 
         WheelConfig.Slot s = sel();
         if (s != null) {
-            label = new EditBox(font, px, y + 10, 160, 16, Component.literal(""));
+            addRenderableWidget(hexBox(px + 114, y + 10, String.format("%06X", s.color & 0xFFFFFF), v -> s.color = v));
+            label = new EditBox(font, px, y + 10, 110, 16, Component.literal(""));
             label.setValue(s.label == null ? "" : s.label); label.setHint(Component.literal(s.anim));
             label.setResponder(v -> s.label = v); addRenderableWidget(label); y += 30;
             icon = new EditBox(font, px, y + 10, 104, 16, Component.literal(""));
@@ -104,7 +112,7 @@ public class EditScreen extends Screen {
             value.setResponder(v -> s.value = v.isEmpty() ? -1 : Integer.parseInt(v)); addRenderableWidget(value);
             addRenderableWidget(Button.builder(Component.translatable("cpmwheel.edit.color"), b -> {
                 int i = 0; for (; i < WheelConfig.PALETTE.length; i++) if (WheelConfig.PALETTE[i] == s.color) break;
-                s.color = WheelConfig.PALETTE[(i + 1) % WheelConfig.PALETTE.length];
+                s.color = WheelConfig.PALETTE[(i + 1) % WheelConfig.PALETTE.length]; rebuildWidgets();
             }).bounds(px + 54, y + 9, 50, 18).build());
             addRenderableWidget(Button.builder(Component.literal(s.favorite ? "\u2605" : "\u2606"), b -> { s.favorite = !s.favorite; rebuildWidgets(); })
                     .bounds(px + 108, y + 9, 24, 18).build());
@@ -117,10 +125,11 @@ public class EditScreen extends Screen {
             } else {
                 addRenderableWidget(Button.builder(Component.translatable("cpmwheel.edit.test"), b -> WheelConfig.run(s)).bounds(px, y, 78, 18).build());
                 addRenderableWidget(Button.builder(Component.translatable("cpmwheel.edit.folder.new"), b -> {
+                    int fc = cfg.nextFolderColor();
                     s.children = new ArrayList<>();
                     for (int i = 0; i < 8; i++) s.children.add(new WheelConfig.Slot());
                     if (!s.anim.isBlank()) { WheelConfig.Slot moved = s.children.get(0); moved.anim = s.anim; moved.label = s.label; moved.icon = s.icon; moved.color = s.color; moved.value = s.value; }
-                    s.anim = ""; s.value = -1; if (s.label == null || s.label.isBlank()) s.label = "Pasta";
+                    s.anim = ""; s.value = -1; s.color = fc; if (s.label == null || s.label.isBlank()) s.label = "Pasta";
                     rebuildWidgets();
                 }).bounds(px + 82, y, 78, 18).build());
                 y += 22;
@@ -172,6 +181,16 @@ public class EditScreen extends Screen {
     }
 
     private int valueLabels = -1;
+
+    /** 6-digit hex colour field; applies only valid values */
+    private EditBox hexBox(int x, int y, String val, java.util.function.IntConsumer set) {
+        EditBox b = new EditBox(font, x, y, 46, 16, Component.literal(""));
+        b.setMaxLength(7);
+        b.setValue(val); b.setHint(Component.literal("#hex"));
+        b.setFilter(v -> v.matches("#?[0-9a-fA-F]{0,6}"));
+        b.setResponder(v -> { int c = WheelConfig.parseHex(v); if (c >= 0) set.accept(c); });
+        return b;
+    }
 
     private EditBox num(int x, int y, String val, String hint, java.util.function.IntConsumer set) {
         EditBox b = new EditBox(font, x, y, 50, 16, Component.literal(""));

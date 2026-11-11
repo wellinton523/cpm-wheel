@@ -89,6 +89,8 @@ public class WheelConfig {
 
     public static class Page {
         public String name = "Page";
+        /** HUD group bar / tab colour */
+        public int color = 0x2EE6FF;
         public List<Slot> slots = new ArrayList<>();
         public Page() {}
         public Page(String n, int size) { name = n; for (int i = 0; i < size; i++) slots.add(new Slot()); }
@@ -103,7 +105,11 @@ public class WheelConfig {
     public String centerMode = "player";
     /** center size in percent (50-200) */
     public int centerSize = 100;
-    public int configVersion = 3;
+    public int configVersion = 4;
+    /** HUD grouped by wheel/folder with nested bars; false = flat list */
+    public boolean hudGrouped = true;
+    /** show group headers even when nothing in them is active */
+    public boolean hudShowEmptyGroups = false;
     /** 1.4.0 look: design + accent theme */
     public String design = "classic";
     public String theme = "auto";
@@ -159,6 +165,13 @@ public class WheelConfig {
                         c.configVersion = 2;
                     }
                     if (c.configVersion < 3) { c.design = "classic"; c.theme = "auto"; c.configVersion = 3; }
+                    if (c.configVersion < 4) { // 1.4.1: page colours + distinct folder colours for the grouped HUD
+                        c.hudGrouped = true;
+                        for (Page pg : c.pages) if (pg.color == 0) pg.color = 0x2EE6FF;
+                        int n = 0;
+                        for (Slot sl : c.allSlots()) if (sl.isFolder() && sl.color == 0x2EE6FF) sl.color = folderColor(n++);
+                        c.configVersion = 4;
+                    }
                     c.fixup();
                     if (c.centerMode == null || c.centerMode.isBlank()) c.centerMode = "player";
                     if (c.hudCorner == null || c.hudCorner.isBlank()) c.hudCorner = "top_left";
@@ -171,7 +184,23 @@ public class WheelConfig {
         return autoFill();
     }
 
+    /** auto, distinct folder colours (never the wheel cyan) */
+    public static int folderColor(int n) {
+        int[] f = {0xFFD23B, 0xB46CFF, 0x3BFF9D, 0xFF3B5C, 0x4D7CFF, 0xFF8FD0, 0xFFFFFF};
+        return f[Math.floorMod(n, f.length)];
+    }
+    public int nextFolderColor() { int n = 0; for (Slot s : allSlots()) if (s.isFolder()) n++; return folderColor(n); }
+
+    /** parse "#RRGGBB" / "RRGGBB", -1 if invalid */
+    public static int parseHex(String v) {
+        if (v == null) return -1;
+        v = v.trim(); if (v.startsWith("#")) v = v.substring(1);
+        if (!v.matches("[0-9a-fA-F]{6}")) return -1;
+        return Integer.parseInt(v, 16);
+    }
+
     void fixup() {
+        for (Page pg : pages) { if (pg.slots == null) pg.slots = new ArrayList<>(); if (pg.color == 0) pg.color = 0x2EE6FF; }
         if (Style.idx(Style.DESIGNS, design) < 0) design = "classic";
         if (Style.idx(Style.THEMES, theme) < 0) theme = "auto";
         iconSize = clamp(iconSize <= 0 ? 100 : iconSize, 50, 250);
@@ -295,7 +324,12 @@ public class WheelConfig {
         return out;
     }
     private static void walk(List<Slot> l, List<Slot> out) {
-        for (Slot s : l) { out.add(s); if (s.children != null) walk(s.children, out); }
+        if (l == null) return;
+        for (Slot s : l) {
+            if (s == null || out.contains(s)) continue; // null-safe, never loops on a folder seen twice
+            out.add(s);
+            if (s.children != null) walk(s.children, out);
+        }
     }
 
     public static void run(Slot s) {

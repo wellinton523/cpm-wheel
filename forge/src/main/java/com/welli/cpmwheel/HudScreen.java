@@ -34,7 +34,11 @@ public class HudScreen extends Screen {
             @Override protected void applyValue() { cfg.hudOpacity = (int) Math.round(value * 20) * 5; }
         }); y += 24;
         addRenderableWidget(Button.builder(Component.translatable("cpmwheel.hud.onlynondefault", onoff(cfg.hudOnlyNonDefault)), b -> {
-            cfg.hudOnlyNonDefault = !cfg.hudOnlyNonDefault; Hud.invalidate(); rebuildWidgets(); }).bounds(x, y, 160, 20).build()); y += 30;
+            cfg.hudOnlyNonDefault = !cfg.hudOnlyNonDefault; Hud.invalidate(); rebuildWidgets(); }).bounds(x, y, 160, 20).build()); y += 24;
+        addRenderableWidget(Button.builder(Component.translatable("cpmwheel.hud.grouped", onoff(cfg.hudGrouped)), b -> {
+            cfg.hudGrouped = !cfg.hudGrouped; Hud.invalidate(); rebuildWidgets(); }).bounds(x, y, 160, 20).build()); y += 24;
+        addRenderableWidget(Button.builder(Component.translatable("cpmwheel.hud.showempty", onoff(cfg.hudShowEmptyGroups)), b -> {
+            cfg.hudShowEmptyGroups = !cfg.hudShowEmptyGroups; Hud.invalidate(); rebuildWidgets(); }).bounds(x, y, 160, 20).build()); y += 30;
         addRenderableWidget(Button.builder(Component.translatable("gui.done"), b -> onClose()).bounds(x, y, 160, 20).build());
     }
 
@@ -43,7 +47,6 @@ public class HudScreen extends Screen {
         g.fill(0, 0, width, height, 0xB0050A12);
         g.drawCenteredString(font, title, width / 2, 20, 0x2EE6FF);
         super.render(g, mx, my, pt);
-        Hud.invalidate();
         g.drawCenteredString(font, Component.translatable("cpmwheel.hud.keyhint"), width / 2, height - 20, 0x7FA8B8);
     }
 

@@ -104,5 +104,7 @@
   "cpmwheel.theme.purple": "purple",
   "cpmwheel.theme.green": "green",
   "cpmwheel.theme.gold": "gold",
-  "cpmwheel.theme.white": "white"
+  "cpmwheel.theme.white": "white",
+  "cpmwheel.hud.grouped": "Grouped HUD: %s",
+  "cpmwheel.hud.showempty": "Show empty groups: %s"
 }
