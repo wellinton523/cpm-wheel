@@ -26,8 +26,10 @@ public class EditScreen extends Screen {
         this.parent = parent;
     }
 
+    private final List<WheelConfig.Slot> path = new ArrayList<>();
     private WheelConfig.Page cur() { return cfg.pages.get(page); }
-    private WheelConfig.Slot sel() { return selected >= 0 && selected < cur().slots.size() ? cur().slots.get(selected) : null; }
+    private List<WheelConfig.Slot> slots() { return path.isEmpty() ? slots() : path.get(path.size() - 1).children; }
+    private WheelConfig.Slot sel() { return selected >= 0 && selected < slots().size() ? slots().get(selected) : null; }
 
     @Override
     protected void init() {
@@ -35,10 +37,11 @@ public class EditScreen extends Screen {
             cfg = WheelConfig.get();
             page = Math.max(0, Math.min(cfg.lastPage - (cfg.viewPages().size() - cfg.pages.size()), cfg.pages.size() - 1));
         }
+        valueLabels = -1;
         anims = new ArrayList<>();
         anims.add(WheelConfig.RESET);
         anims.addAll(CpmBridge.listAnimations().keySet());
-        for (WheelConfig.Page p : cfg.pages) for (WheelConfig.Slot s : p.slots)
+        for (WheelConfig.Slot s : cfg.allSlots())
             if (!s.empty() && !anims.contains(s.anim)) anims.add(s.anim);
 
         custom = new EditBox(font, 8, height - 50, LIST_W - 26, 16, Component.literal(""));
@@ -63,10 +66,18 @@ public class EditScreen extends Screen {
         addRenderableWidget(Button.builder(Component.translatable("cpmwheel.edit.delpage"), b -> {
             if (cfg.pages.size() > 1) { cfg.pages.remove(page); setPage(Math.min(page, cfg.pages.size() - 1)); }
         }).bounds(px + 102, y, 58, 18).build()); y += 22;
-        addRenderableWidget(Button.builder(Component.literal("+ slot"), b -> { if (cur().slots.size() < 12) cur().slots.add(new WheelConfig.Slot()); })
+        if (!path.isEmpty()) {
+            addRenderableWidget(Button.builder(Component.translatable("cpmwheel.edit.folder.back"), b -> {
+                path.remove(path.size() - 1); selected = -1; rebuildWidgets(); }).bounds(LIST_W + 16, 22, 70, 18).build());
+        }
+        addRenderableWidget(Button.builder(Component.translatable("cpmwheel.edit.animations", onoff(cfg.animations)), b -> {
+            cfg.animations = !cfg.animations; rebuildWidgets(); }).bounds(px, height - 114, 160, 18).build());
+        addRenderableWidget(Button.builder(Component.translatable("cpmwheel.edit.livepreview", onoff(cfg.livePreview)), b -> {
+            cfg.livePreview = !cfg.livePreview; rebuildWidgets(); }).bounds(px, height - 92, 160, 18).build());
+        addRenderableWidget(Button.builder(Component.literal("+ slot"), b -> { if (slots().size() < 12) slots().add(new WheelConfig.Slot()); })
                 .bounds(px, y, 78, 18).build());
         addRenderableWidget(Button.builder(Component.literal("- slot"), b -> {
-            if (cur().slots.size() > 2) { cur().slots.remove(cur().slots.size() - 1); selected = -1; rebuildWidgets(); }
+            if (slots().size() > 2) { slots().remove(slots().size() - 1); selected = -1; rebuildWidgets(); }
         }).bounds(px + 82, y, 78, 18).build()); y += 28;
 
         WheelConfig.Slot s = sel();
@@ -91,20 +102,65 @@ public class EditScreen extends Screen {
             addRenderableWidget(Button.builder(Component.literal(s.favorite ? "\u2605" : "\u2606"), b -> { s.favorite = !s.favorite; rebuildWidgets(); })
                     .bounds(px + 108, y + 9, 24, 18).build());
             addRenderableWidget(Button.builder(Component.literal("\u2716"), b -> {
-                cur().slots.set(selected, new WheelConfig.Slot()); rebuildWidgets();
+                slots().set(selected, new WheelConfig.Slot()); rebuildWidgets();
             }).bounds(px + 136, y + 9, 24, 18).build()); y += 32;
-            addRenderableWidget(Button.builder(Component.translatable("cpmwheel.edit.test"), b -> WheelConfig.run(s)).bounds(px, y, 160, 18).build());
+            if (s.isFolder()) {
+                addRenderableWidget(Button.builder(Component.translatable("cpmwheel.edit.folder.open"), b -> {
+                    path.add(s); selected = -1; rebuildWidgets(); }).bounds(px, y, 160, 18).build());
+            } else {
+                addRenderableWidget(Button.builder(Component.translatable("cpmwheel.edit.test"), b -> WheelConfig.run(s)).bounds(px, y, 78, 18).build());
+                addRenderableWidget(Button.builder(Component.translatable("cpmwheel.edit.folder.new"), b -> {
+                    s.children = new ArrayList<>();
+                    for (int i = 0; i < 8; i++) s.children.add(new WheelConfig.Slot());
+                    if (!s.anim.isBlank()) { WheelConfig.Slot moved = s.children.get(0); moved.anim = s.anim; moved.label = s.label; moved.icon = s.icon; moved.color = s.color; moved.value = s.value; }
+                    s.anim = ""; s.value = -1; if (s.label == null || s.label.isBlank()) s.label = "Pasta";
+                    rebuildWidgets();
+                }).bounds(px + 82, y, 78, 18).build());
+                y += 22;
+                String m = s.mode == null ? "" : s.mode;
+                Component mc = m.isEmpty() ? Component.translatable("cpmwheel.edit.mode.auto", s.effectiveMode())
+                        : Component.translatable(m.equals("toggle") ? "cpmwheel.edit.mode.toggle_s" : "cpmwheel.edit.mode." + m);
+                addRenderableWidget(Button.builder(mc, b -> {
+                    String[] order = {"", "toggle", "slider", "presets"};
+                    int i = java.util.Arrays.asList(order).indexOf(s.mode == null ? "" : s.mode);
+                    s.mode = order[(i + 1) % order.length]; rebuildWidgets();
+                }).bounds(px, y, 160, 18).build());
+                y += 20;
+                if (!"toggle".equals(s.effectiveMode()) && !WheelConfig.RESET.equals(s.anim)) {
+                    EditBox mn = num(px, y + 10, s.min <= 0 ? "" : "" + s.min, "0", v -> s.min = v);
+                    EditBox mxb = num(px + 54, y + 10, s.max <= 0 ? "" : "" + s.max, "" + s.maxV(), v -> s.max = v);
+                    EditBox st = num(px + 108, y + 10, s.step <= 0 ? "" : "" + s.step, "" + s.stepV(), v -> s.step = v);
+                    y += 30;
+                    if ("presets".equals(s.effectiveMode())) {
+                        EditBox pr = new EditBox(font, px, y + 10, 160, 16, Component.literal(""));
+                        pr.setValue(s.presets == null ? "" : s.presets);
+                        pr.setResponder(v -> s.presets = v); addRenderableWidget(pr);
+                        valueLabels = y;
+                    }
+                }
+            }
         }
 
         addRenderableWidget(Button.builder(Component.translatable(cfg.holdToOpen ? "cpmwheel.edit.mode.hold" : "cpmwheel.edit.mode.toggle"),
                 b -> { cfg.holdToOpen = !cfg.holdToOpen; rebuildWidgets(); }).bounds(px, height - 70, 160, 18).build());
         addRenderableWidget(Button.builder(Component.translatable("cpmwheel.edit.autofill"), b -> {
             List<String> have = new ArrayList<>();
-            for (WheelConfig.Page p : cfg.pages) for (WheelConfig.Slot sl : p.slots) have.add(sl.anim);
+            for (WheelConfig.Slot sl : cfg.allSlots()) have.add(sl.anim);
             for (String a : CpmBridge.listAnimations().keySet()) if (!have.contains(a)) place(a);
             rebuildWidgets();
         }).bounds(px, height - 48, 160, 18).build());
         addRenderableWidget(Button.builder(Component.translatable("gui.done"), b -> onClose()).bounds(px, height - 26, 160, 20).build());
+    }
+
+    private int valueLabels = -1;
+
+    private EditBox num(int x, int y, String val, String hint, java.util.function.IntConsumer set) {
+        EditBox b = new EditBox(font, x, y, 50, 16, Component.literal(""));
+        b.setValue(val); b.setHint(Component.literal(hint));
+        b.setFilter(v -> v.matches("\\d{0,4}"));
+        b.setResponder(v -> set.accept(v.isEmpty() ? -1 : Integer.parseInt(v)));
+        addRenderableWidget(b);
+        return b;
     }
 
     /** Put an animation in the first free slot, adding pages as needed. */
@@ -114,14 +170,16 @@ public class EditScreen extends Screen {
         p.slots.get(0).anim = a; cfg.pages.add(p);
     }
 
-    private void setPage(int p) { page = Math.floorMod(p, cfg.pages.size()); selected = -1; rebuildWidgets(); }
+    private static String onoff(boolean b) { return b ? "ON" : "OFF"; }
+
+    private void setPage(int p) { path.clear(); page = Math.floorMod(p, cfg.pages.size()); selected = -1; rebuildWidgets(); }
 
     private float cx() { return (LIST_W + 16 + width - 178) / 2f; }
     private float cy() { return height / 2f + 6; }
     private float R() { return Math.min((width - 178 - LIST_W - 16) / 2f - 10, height / 2f - 30); }
 
     private int slotAt(double mx, double my) {
-        int n = cur().slots.size();
+        int n = slots().size();
         double dx = mx - cx(), dy = my - cy(), d2 = dx * dx + dy * dy, R = R();
         if (d2 < (R * 0.35) * (R * 0.35) || d2 > (R + 8) * (R + 8)) return -1;
         double seg = Math.PI * 2 / n, ang = Math.atan2(dx, -dy);
@@ -148,7 +206,7 @@ public class EditScreen extends Screen {
         }
         // wheel
         float cx = cx(), cy = cy(), R = R(), r0 = R * 0.35f;
-        List<WheelConfig.Slot> slots = cur().slots;
+        List<WheelConfig.Slot> slots = slots();
         int n = slots.size(), hv = slotAt(mx, my);
         double seg = Math.PI * 2 / n;
         for (int i = 0; i < n; i++) {
@@ -160,12 +218,17 @@ public class EditScreen extends Screen {
             float tx = cx + (float) Math.sin(i * seg) * (r0 + R) / 2, ty = cy - (float) Math.cos(i * seg) * (r0 + R) / 2;
             int textY = (int) ty - 4;
             if (Icons.has(s.icon)) { Icons.draw(g, s.icon, (int) tx, (int) ty - 6, 16); textY = (int) ty + 4; }
-            String l = s.empty() ? (i + 1) + "" : s.display();
+            String l = s.empty() ? (i + 1) + "" : (s.isFolder() ? "\u25B8 " : "") + s.display();
             g.drawCenteredString(font, font.plainSubstrByWidth(l, (int) (R * 0.7f)), (int) tx, textY, s.empty() ? 0x55667A : 0xFFFFFF);
             if (s.favorite) g.drawString(font, "\u2605", (int) tx - 3, textY + 10, 0xFFD23B);
         }
         Draw.sector(g, cx, cy, 0, r0 - 3, 0, Math.PI * 2, 0xD0060C14);
-        g.drawCenteredString(font, cur().name, (int) cx, (int) cy - 8, 0x2EE6FF);
+        g.drawCenteredString(font, path.isEmpty() ? cur().name : path.get(path.size() - 1).display(), (int) cx, (int) cy - 8, 0x2EE6FF);
+        if (!path.isEmpty()) {
+            StringBuilder sb = new StringBuilder(cur().name);
+            for (WheelConfig.Slot f : path) sb.append(" \u203A ").append(f.display());
+            g.drawString(font, sb.toString(), LIST_W + 90, 27, 0x2EE6FF);
+        }
         g.drawCenteredString(font, (page + 1) + "/" + cfg.pages.size(), (int) cx, (int) cy + 4, 0x7FA8B8);
         g.drawString(font, Component.translatable("cpmwheel.edit.help"), LIST_W + 16, height - 14, 0x7FA8B8);
 
@@ -206,7 +269,7 @@ public class EditScreen extends Screen {
         }
         int sl = slotAt(mx, my);
         if (sl >= 0) {
-            if (btn == 1) { cur().slots.get(sl).favorite = !cur().slots.get(sl).favorite; return true; }
+            if (btn == 1) { slots().get(sl).favorite = !slots().get(sl).favorite; return true; }
             selected = sl; dragSlot = sl; dragX = mx; dragY = my; rebuildWidgets();
             return true;
         }
@@ -218,7 +281,14 @@ public class EditScreen extends Screen {
         int sl = slotAt(mx, my);
         if (dragAnim != null) {
             if (sl >= 0) {
-                WheelConfig.Slot s = cur().slots.get(sl);
+                WheelConfig.Slot s = slots().get(sl);
+                if (s.isFolder()) {
+                    WheelConfig.Slot free = null;
+                    for (WheelConfig.Slot c : s.children) if (c.empty()) { free = c; break; }
+                    if (free == null && s.children.size() < 12) { free = new WheelConfig.Slot(); s.children.add(free); }
+                    if (free != null) { free.anim = dragAnim; if (WheelConfig.RESET.equals(dragAnim)) free.color = 0xFF3B5C; }
+                    dragAnim = null; return true;
+                }
                 s.anim = dragAnim; s.label = ""; s.value = -1;
                 if (WheelConfig.RESET.equals(dragAnim)) s.color = 0xFF3B5C;
                 selected = sl; rebuildWidgets();
@@ -227,10 +297,10 @@ public class EditScreen extends Screen {
         }
         if (dragSlot >= 0) {
             if (sl >= 0 && sl != dragSlot) {
-                var l = cur().slots; var t = l.get(sl); l.set(sl, l.get(dragSlot)); l.set(dragSlot, t);
+                var l = slots(); var t = l.get(sl); l.set(sl, l.get(dragSlot)); l.set(dragSlot, t);
                 selected = sl; rebuildWidgets();
             } else if (sl < 0 && (mx < 8 + LIST_W + 2) && Math.abs(mx - dragX) > 6) { // dragged back to list = clear
-                cur().slots.set(dragSlot, new WheelConfig.Slot()); selected = -1; rebuildWidgets();
+                slots().set(dragSlot, new WheelConfig.Slot()); selected = -1; rebuildWidgets();
             }
             dragSlot = -1; return true;
         }

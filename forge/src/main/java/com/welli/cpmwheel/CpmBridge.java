@@ -115,6 +115,17 @@ public final class CpmBridge {
         return out;
     }
 
+    private static Map<String, Integer> maxCache = new HashMap<>();
+    private static long maxCacheAt = 0;
+
+    /** CPM max value of an animation (1 = on/off toggle, >1 = value/layer animation), 1 if unknown. */
+    public static int maxValue(String name) {
+        if (name == null || name.isBlank()) return 1;
+        long now = System.currentTimeMillis();
+        if (now - maxCacheAt > 1000) { maxCache = listAnimations(); maxCacheAt = now; }
+        return maxCache.getOrDefault(name, 1);
+    }
+
     public static boolean play(String name, int value) {
         try {
             if (clientApi != null) {

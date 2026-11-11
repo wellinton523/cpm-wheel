@@ -19,10 +19,34 @@ public class WheelConfig {
         public String icon = "";
         public int value = -1;
         public boolean favorite = false;
+        /** non-null = this slot is a sub-wheel (folder) */
+        public List<Slot> children = null;
+        /** "" auto, "toggle", "slider", "presets" */
+        public String mode = "";
+        public int min = 0, max = -1, step = -1;
+        public String presets = "0,25,50,75,100";
+
+        public boolean isFolder() { return children != null; }
+        public String effectiveMode() {
+            if (mode != null && !mode.isBlank()) return mode;
+            return CpmBridge.maxValue(anim) > 1 ? "slider" : "toggle";
+        }
+        public int minV() { return Math.max(0, min); }
+        public int maxV() { int m = max > 0 ? max : CpmBridge.maxValue(anim); return Math.max(minV() + 1, m > 1 ? m : 255); }
+        public int stepV() { return step > 0 ? step : Math.max(1, (maxV() - minV()) / 20); }
+        public int[] presetValues() {
+            List<Integer> l = new ArrayList<>();
+            for (String p : (presets == null ? "" : presets).split("[,; ]+")) {
+                try { float f = Float.parseFloat(p.trim().replace("%", "")); l.add(Math.round(minV() + (maxV() - minV()) * Math.max(0, Math.min(100, f)) / 100f)); } catch (Exception ignored) {}
+            }
+            if (l.isEmpty()) { l.add(minV()); l.add(maxV()); }
+            Collections.sort(l);
+            return l.stream().mapToInt(Integer::intValue).toArray();
+        }
         public Slot() {}
         public Slot(String a) { anim = a; }
-        public String display() { return label != null && !label.isBlank() ? label : (RESET.equals(anim) ? "Reset" : anim); }
-        public boolean empty() { return anim == null || anim.isBlank(); }
+        public String display() { return label != null && !label.isBlank() ? label : (isFolder() ? "..." : RESET.equals(anim) ? "Reset" : anim); }
+        public boolean empty() { return !isFolder() && (anim == null || anim.isBlank()); }
     }
 
     public static class Page {
@@ -33,6 +57,9 @@ public class WheelConfig {
     }
 
     public boolean holdToOpen = true;
+    public boolean animations = true;
+    public boolean livePreview = true;
+    public boolean previewOnHover = true;
     public boolean showFavoritesPage = true;
     public int lastPage = 0;
     public List<Page> pages = new ArrayList<>();
@@ -97,15 +124,25 @@ public class WheelConfig {
         List<Page> l = new ArrayList<>();
         if (showFavoritesPage) {
             Page fav = new Page("\u2605", 0);
-            for (Page p : pages) for (Slot s : p.slots) if (s.favorite && !s.empty()) fav.slots.add(s);
+            for (Slot s : allSlots()) if (s.favorite && !s.empty()) fav.slots.add(s);
             if (!fav.slots.isEmpty()) l.add(fav);
         }
         l.addAll(pages);
         return l;
     }
 
+    /** every slot, including inside sub-wheels */
+    public List<Slot> allSlots() {
+        List<Slot> out = new ArrayList<>();
+        for (Page p : pages) walk(p.slots, out);
+        return out;
+    }
+    private static void walk(List<Slot> l, List<Slot> out) {
+        for (Slot s : l) { out.add(s); if (s.children != null) walk(s.children, out); }
+    }
+
     public static void run(Slot s) {
-        if (s == null || s.empty()) return;
+        if (s == null || s.empty() || s.isFolder()) return;
         if (RESET.equals(s.anim)) CpmBridge.resetAll();
         else CpmBridge.play(s.anim, s.value);
     }
