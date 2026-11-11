@@ -112,7 +112,7 @@ public class WheelConfig {
     public String centerMode = "player";
     /** center size in percent (50-200) */
     public int centerSize = 100;
-    public int configVersion = 6;
+    public int configVersion = 7;
     private static final String LEGACY_DESIGN = "signalis";
     /** HUD grouped by wheel/folder with nested bars; false = flat list */
     public boolean hudGrouped = true;
@@ -128,7 +128,7 @@ public class WheelConfig {
     public boolean centerIconOnly = false;
     public int centerIconSize = 100;
     /** inner ring with favorites + recently used */
-    public boolean innerRing = true;
+    public boolean innerRing = false;
     public List<String> recents = new ArrayList<>();
     public boolean sounds = true;
     public int soundVolume = 50;
@@ -180,6 +180,8 @@ public class WheelConfig {
                         for (Slot sl : c.allSlots()) if (sl.isFolder() && sl.color == 0x2EE6FF) sl.color = folderColor(n++);
                         c.configVersion = 4;
                     }
+                    if (c.configVersion < 7) c.innerRing = false; // 1.4.4: center ring off once on upgrade
+                    if (c.configVersion < 7) c.configVersion = 7;
                     if (c.configVersion < 6) c.configVersion = 6; // 1.4.2: design id rename + per-slot displayMode (defaults to "") handled in fixup()
                     c.fixup();
                     if (c.centerMode == null || c.centerMode.isBlank()) c.centerMode = "player";
