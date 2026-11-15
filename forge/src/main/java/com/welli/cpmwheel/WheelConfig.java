@@ -170,16 +170,22 @@ public class WheelConfig {
         public int value = -1;
     }
 
-    /** 1.5.7 item group: kind "pattern" (wildcard * ? or re:regex on the id), "class" (item class incl. subclasses), "tag" (item tag), "list" (only the listed ids) */
+    /** 1.5.8: kind "query" ($backpack -$upgrade @mod, see ItemGroups.Query). 1.5.7 item group: kind "pattern" (wildcard * ? or re:regex on the id), "class" (item class incl. subclasses), "tag" (item tag), "list" (only the listed ids) */
     public static class ItemGroup {
         public String id = "";
         public String name = "";
         /** mod (namespace) the group belongs to; "" = any mod */
         public String mod = "";
-        public String kind = "pattern";
+        public String kind = "query";
         public String value = "";
         /** extra items always in the group (and the only members for kind "list") */
         public List<String> items = new ArrayList<>();
+        /** 1.5.8 kind "query": $terms also match the item's display name (game language) */
+        public boolean names = true;
+        /** 1.5.8: "Não incluir" words (query kind), items clicked off in the preview, group colour */
+        public String notq = "";
+        public List<String> exclude = new ArrayList<>();
+        public int color = 0xFFD23B;
         public String label() { return name == null || name.isBlank() ? (value == null || value.isBlank() ? id : value) : name; }
     }
 
@@ -197,6 +203,16 @@ public class WheelConfig {
         /** debounce in ms: condition must hold this long before starting / ending */
         public int delayStart = 0, delayEnd = 1000;
         public boolean notify = true;
+        /** 1.5.8: while active, the wheel buttons of the animations it holds are locked (no manual change; restore = pre-trigger state) */
+        public boolean lock = true;
+    }
+
+    /** 1.5.8 movable HUD element: anchor (tl tc tr ml mc mr bl bc br) + offset in GUI pixels + scale % */
+    public static class HudPos {
+        public String anchor = "tl";
+        public int dx = 4, dy = 4, scale = 100;
+        public HudPos() {}
+        public HudPos(String a, int x, int y, int sc) { anchor = a; dx = x; dy = y; scale = sc; }
     }
 
     /** target "anim:<cpm animation>" or "group:<group button name>"; op "on" (ATIVAR), "off" (DESATIVAR), "toggle" (ALTERNAR); value for ATIVAR on value animations (-1 = button value / max) */
@@ -234,7 +250,7 @@ public class WheelConfig {
     public String centerMode = "player";
     /** center size in percent (50-200) */
     public int centerSize = 100;
-    public int configVersion = 16;
+    public int configVersion = 17;
     private static final String LEGACY_DESIGN = "signalis";
     /** HUD grouped by wheel/folder with nested bars; false = flat list */
     public boolean hudGrouped = true;
@@ -272,6 +288,8 @@ public class WheelConfig {
     /** 1.5.5: per-item ("ns:id|main/off") and per-mod ("mod:ns|main/off") overrides {x,y,z,scale,rx,ry,rz}; priority item > mod > category */
     public java.util.Map<String, int[]> haItem = new java.util.HashMap<>();
     public boolean haItemOn = true;
+    /** 1.5.8 "Física de pendurado" per item/group/mod/type and hand: {on, pivot, intensity, stiffness, damping x10, weight, max angle, react} */
+    public java.util.Map<String, int[]> haPhys = new java.util.HashMap<>();
     /** 1.5.4: categories drawn 2D (flat item) instead of 3D (lantern, torch, block each separate); arm adjust per hand */
     public List<String> haFlat = new ArrayList<>();
     public java.util.Map<String, int[]> haArm = new java.util.HashMap<>();
@@ -290,6 +308,13 @@ public class WheelConfig {
     public int hudScale = 100;
     public int hudOpacity = 60;
     public boolean hudOnlyNonDefault = true;
+    /** 1.5.8: positions of every HUD element ("list" = active items, "toasts" = trigger notifications) */
+    public java.util.Map<String, HudPos> hudPos = new java.util.HashMap<>();
+    public boolean hudSnap = true;
+    /** 1.5.8 trigger toasts: on, seconds on screen, background opacity %, compact row with timer while the effect lasts */
+    public boolean toastOn = true;
+    public int toastSecs = 4, toastOpacity = 85;
+    public boolean toastMini = true;
     public boolean showFavoritesPage = true;
     public int lastPage = 0;
     public List<Page> pages = new ArrayList<>();
@@ -339,6 +364,8 @@ public class WheelConfig {
                     if (c.configVersion < 10) c.configVersion = 10; // 1.4.7: handGlow (default auto, set in fixup) // 1.4.6: group members -> actions (fixup), keybinds, conditional slots // 1.4.5: group slots (new fields, default none)
                     if (c.configVersion < 6) c.configVersion = 6; // 1.4.2: design id rename + per-slot displayMode (defaults to "") handled in fixup()
                     if (c.configVersion < 16) { c.configVersion = 16; c.haWorldArm = "on"; c.haWorldDepth = 40; c.effOn = true; } // 1.5.7: world-pass arm (Better Combat method) on, item groups, effect triggers
+                    if (c.configVersion < 17) { c.configVersion = 17; c.toastOn = true; c.toastSecs = 4; c.toastOpacity = 85; c.toastMini = true; c.hudSnap = true;
+                        if (c.effRules != null) for (EffectRule r : c.effRules) if (r != null) r.lock = true; } // 1.5.8: query groups, physics, movable HUD (list position from the old corner), toasts, trigger lock
                     c.fixup();
                     if (c.centerMode == null || c.centerMode.isBlank()) c.centerMode = "player";
                     if (c.hudCorner == null || c.hudCorner.isBlank()) c.hudCorner = "top_left";
@@ -381,6 +408,15 @@ public class WheelConfig {
         if (haFlat == null) haFlat = new ArrayList<>();
         if (haItem == null) haItem = new java.util.HashMap<>();
         haItem.entrySet().removeIf(e -> e.getKey() == null || !(e.getKey().endsWith("|main") || e.getKey().endsWith("|off")) || e.getValue() == null || e.getValue().length != 7);
+        if (hudPos == null) hudPos = new java.util.HashMap<>();
+        hudPos.values().removeIf(java.util.Objects::isNull);
+        if (!hudPos.containsKey("list")) hudPos.put("list", Hud.defaultPos("list", this));
+        if (!hudPos.containsKey("toasts")) hudPos.put("toasts", Hud.defaultPos("toasts", this));
+        for (HudPos hp : hudPos.values()) { if (!java.util.Arrays.asList(Hud.ANCHORS).contains(hp.anchor)) hp.anchor = "tl"; hp.scale = Math.max(50, Math.min(300, hp.scale <= 0 ? 100 : hp.scale)); }
+        toastSecs = Math.max(1, Math.min(15, toastSecs <= 0 ? 4 : toastSecs));
+        toastOpacity = Math.max(0, Math.min(100, toastOpacity));
+        if (haPhys == null) haPhys = new java.util.HashMap<>();
+        haPhys.entrySet().removeIf(e -> e.getKey() == null || !(e.getKey().endsWith("|main") || e.getKey().endsWith("|off")) || e.getValue() == null || e.getValue().length != 8);
         haFlat.removeIf(k -> k == null || java.util.Arrays.asList(HandAnim.CATS).indexOf(k) < 0);
         if (haGroups == null) haGroups = new ArrayList<>();
         haGroups.removeIf(java.util.Objects::isNull);
@@ -388,8 +424,12 @@ public class WheelConfig {
         for (ItemGroup g : haGroups) {
             if (g.id == null || g.id.isBlank() || !gids.add(g.id)) { g.id = newId("g"); gids.add(g.id); }
             if (g.name == null) g.name = ""; if (g.mod == null) g.mod = ""; if (g.value == null) g.value = "";
-            if (!java.util.Arrays.asList("pattern", "class", "tag", "list").contains(g.kind)) g.kind = "pattern";
+            if (!java.util.Arrays.asList("query", "pattern", "class", "tag", "list").contains(g.kind)) g.kind = "pattern";
             if (g.items == null) g.items = new ArrayList<>();
+            if (g.notq == null) g.notq = "";
+            if (g.exclude == null) g.exclude = new ArrayList<>();
+            g.exclude.removeIf(i -> i == null || i.isBlank());
+            if (g.color == 0) g.color = 0xFFD23B;
             g.items.removeIf(i -> i == null || i.isBlank());
         }
         if (effRules == null) effRules = new ArrayList<>();

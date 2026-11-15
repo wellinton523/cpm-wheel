@@ -21,4 +21,13 @@ final class ItemInfo {
     static String effectId(net.minecraft.world.effect.MobEffectInstance e) {
         try { var k = net.minecraft.core.registries.BuiltInRegistries.MOB_EFFECT.getKey(e.getEffect()); return k == null ? "" : k.toString(); } catch (Throwable t) { return ""; }
     }
+
+    /** 1.5.8 toasts: the effect's HUD icon */
+    static net.minecraft.client.renderer.texture.TextureAtlasSprite effectSprite(String id) {
+        try {
+            net.minecraft.resources.ResourceLocation rl = net.minecraft.resources.ResourceLocation.tryParse(id);
+            net.minecraft.world.effect.MobEffect e = rl == null ? null : net.minecraft.core.registries.BuiltInRegistries.MOB_EFFECT.get(rl);
+            return e == null ? null : net.minecraft.client.Minecraft.getInstance().getMobEffectTextures().get(e);
+        } catch (Throwable t) { return null; }
+    }
 }

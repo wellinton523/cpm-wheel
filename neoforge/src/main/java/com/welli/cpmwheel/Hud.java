@@ -120,9 +120,51 @@ public final class Hud {
     private static int barX(int depth) { return depth < 0 ? 0 : depth * INDENT; }
     private static int textX(int depth) { return (depth + 1) * INDENT + 5; }
 
+    // ---------- 1.5.8 movable HUD ----------
+    public static final String[] ANCHORS = {"tl", "tc", "tr", "ml", "mc", "mr", "bl", "bc", "br"};
+    public static final String[] ELEMENTS = {"list", "toasts"};
+    /** set by the HUD edit screen: draw samples so every element can be grabbed even when empty */
+    public static boolean editing = false;
+    /** last drawn screen rectangle {x, y, w, h} per element (GUI pixels) */
+    public static final java.util.Map<String, int[]> BOUNDS = new java.util.HashMap<>();
+
+    public static WheelConfig.HudPos defaultPos(String el, WheelConfig c) {
+        if ("toasts".equals(el)) return new WheelConfig.HudPos("mr", -4, 0, 100);
+        String corner = c == null || c.hudCorner == null ? "top_left" : c.hudCorner;
+        int sc = c == null || c.hudScale <= 0 ? 100 : c.hudScale;
+        return switch (corner) {
+            case "top_right" -> new WheelConfig.HudPos("tr", -4, 4, sc);
+            case "bottom_left" -> new WheelConfig.HudPos("bl", 4, -4, sc);
+            case "bottom_right" -> new WheelConfig.HudPos("br", -4, -4, sc);
+            default -> new WheelConfig.HudPos("tl", 4, 4, sc);
+        };
+    }
+    public static WheelConfig.HudPos pos(WheelConfig c, String el) {
+        WheelConfig.HudPos p = c.hudPos == null ? null : c.hudPos.get(el);
+        if (p == null) { p = defaultPos(el, c); if (c.hudPos != null) c.hudPos.put(el, p); }
+        return p;
+    }
+    static float ax(String a) { return a.endsWith("l") ? 0f : a.endsWith("c") ? 0.5f : 1f; }
+    static float ay(String a) { return a.startsWith("t") ? 0f : a.startsWith("m") ? 0.5f : 1f; }
+    /** top-left corner on screen for an element of (already scaled) size w x h */
+    public static int[] place(WheelConfig.HudPos p, int w, int h, int sw, int sh) {
+        float fx = ax(p.anchor), fy = ay(p.anchor);
+        int x = Math.round(fx * sw + p.dx - fx * w), y = Math.round(fy * sh + p.dy - fy * h);
+        return new int[]{Math.max(0, Math.min(sw - Math.min(w, sw), x)), Math.max(0, Math.min(sh - Math.min(h, sh), y))};
+    }
+    /** store a dragged position relative to the nearest screen anchor (so it survives resolution / GUI scale changes) */
+    public static void store(WheelConfig.HudPos p, int x, int y, int w, int h, int sw, int sh) {
+        float cx = (x + w / 2f) / sw, cy = (y + h / 2f) / sh;
+        String a = (cy < 1 / 3f ? "t" : cy < 2 / 3f ? "m" : "b") + (cx < 1 / 3f ? "l" : cx < 2 / 3f ? "c" : "r");
+        float fx = ax(a), fy = ay(a);
+        p.anchor = a;
+        p.dx = Math.round(x - fx * sw + fx * w);
+        p.dy = Math.round(y - fy * sh + fy * h);
+    }
+
     public static void render(GuiGraphics g) {
         Minecraft mc = Minecraft.getInstance();
-        if (mc.player == null || mc.options.hideGui || mc.screen instanceof WheelScreen) return;
+        if (mc.player == null || (mc.options.hideGui && !editing) || mc.screen instanceof WheelScreen) return;
         long now = System.currentTimeMillis();
         if (cfg == null || now - lastPoll > 250) { // config, CPM state and layout are rebuilt only 4x per second
             lastPoll = now;
@@ -130,17 +172,30 @@ public final class Hud {
             present = CpmBridge.cpmPresent();
             if (cfg.hudEnabled && present) poll(cfg, mc.font);
         }
-        if (!cfg.hudEnabled || !present || rows.isEmpty()) return;
+        BOUNDS.clear();
+        renderList(g, mc);
+        TriggerToasts.render(g, cfg, editing);
+    }
+
+    private static void renderList(GuiGraphics g, Minecraft mc) {
+        List<Row> rows = Hud.rows; List<Bar> bars = Hud.bars; int w = layoutW;
+        if (!cfg.hudEnabled || !present || rows.isEmpty()) {
+            if (!editing) return;
+            rows = List.of(new Row(0, true, "CPM Wheel", "", 0x2EE6FF), new Row(1, false, "Exemplo", "ON", 0x3BFF9D));
+            bars = List.of(new Bar(0, 0, 1, 0x2EE6FF));
+            w = textX(1) + mc.font.width("Exemplo: ON") + 6;
+        }
         var font = mc.font;
-        float sc = cfg.hudScale / 100f;
-        int w = layoutW, h = rows.size() * ROW + 6;
-        int sw = (int) (g.guiWidth() / sc), sh = (int) (g.guiHeight() / sc);
-        String c = cfg.hudCorner == null ? "top_left" : cfg.hudCorner;
-        int x = c.endsWith("right") ? sw - w - 4 : 4;
-        int y = c.startsWith("bottom") ? sh - h - 4 : 4;
+        WheelConfig.HudPos hp = pos(cfg, "list");
+        float sc = hp.scale / 100f;
+        int h = rows.size() * ROW + 6;
+        int[] xy = place(hp, Math.round(w * sc), Math.round(h * sc), g.guiWidth(), g.guiHeight());
+        BOUNDS.put("list", new int[]{xy[0], xy[1], Math.round(w * sc), Math.round(h * sc)});
         int bgA = Math.max(0, Math.min(255, cfg.hudOpacity * 255 / 100));
         g.pose().pushPose();
+        g.pose().translate(xy[0], xy[1], 0);
         g.pose().scale(sc, sc, 1);
+        int x = 0, y = 0;
         g.fill(x, y, x + w, y + h, (bgA << 24) | 0x050A12);
         for (Bar b : bars) {
             int bx = x + barX(b.depth);
@@ -159,6 +214,15 @@ public final class Hud {
             ly += ROW;
         }
         g.pose().popPose();
+    }
+
+    /** small padlock drawn with fills, centered on (x, y) */
+    public static void lock(GuiGraphics g, int x, int y, int color) {
+        g.fill(x - 4, y - 1, x + 4, y + 5, 0xFF000000 | color);
+        g.fill(x - 3, y - 5, x - 1, y - 1, 0xFF000000 | color);
+        g.fill(x + 1, y - 5, x + 3, y - 1, 0xFF000000 | color);
+        g.fill(x - 3, y - 6, x + 3, y - 4, 0xFF000000 | color);
+        g.fill(x - 1, y + 1, x + 1, y + 3, 0xFF101820);
     }
 
     public static void invalidate() { lastPoll = 0; }

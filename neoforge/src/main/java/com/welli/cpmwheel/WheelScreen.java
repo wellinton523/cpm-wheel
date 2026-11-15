@@ -76,6 +76,8 @@ public class WheelScreen extends Screen {
     /** play an inner-ring entry; toggles close the wheel, value slots keep it open */
     private void playRing(WheelConfig.Slot s) {
         endPreview(true);
+        String lk = EffectTriggers.lockedBy(s);
+        if (lk != null) { EffectTriggers.lockedFeedback(lk); return; } // 1.5.8: held by a trigger
         Actions.trigger(cfg, s);
         ring = cfg.ringSlots();
         if (WheelConfig.RESET.equals(s.anim) || "toggle".equals(s.effectiveMode())) super.onClose();
@@ -119,6 +121,8 @@ public class WheelScreen extends Screen {
         if (h < 0 || h >= sl.size() || sl.get(h).empty()) { endPreview(true); onClose(); return; }
         WheelConfig.Slot s = sl.get(h);
         if (s.isFolder()) { enter(s); return; }
+        String lk = EffectTriggers.lockedBy(s);
+        if (lk != null) { endPreview(true); EffectTriggers.lockedFeedback(lk); holdActive = false; return; } // 1.5.8: does nothing while a trigger holds it
         if (isValue(s)) {
             endPreview(true);
             cfg.addRecent(s.anim);
@@ -172,7 +176,7 @@ public class WheelScreen extends Screen {
         if (!cfg.previewOnHover) return;
         if (s == previewSlot) return;
         endPreview(true);
-        if (!previewable(s) || isValue(s)) return;
+        if (!previewable(s) || isValue(s) || EffectTriggers.lockedBy(s) != null) return;
         int prev = CpmBridge.playing(s.anim);
         if (prev < 0) return; // unknown state: cannot revert safely, skip preview
         int v = s.value >= 0 ? s.value : (prev > 0 ? 0 : 1);
@@ -300,6 +304,7 @@ public class WheelScreen extends Screen {
                 g.drawCenteredString(font, gst == 2 ? "ON" : gst == 1 ? "\u25D0" : "OFF", (int) tx, iy, gst == 2 ? 0x3BFF9D : gst == 1 ? 0xFFD23B : 0x7FA8B8);
             }
             if (s.isCond() && s.lastMatch != null) g.drawCenteredString(font, font.plainSubstrByWidth(s.lastMatch, (int) (R * 0.7f)), (int) tx, (int) ty + Math.max(8, isz / 2 + 2) + (s.iconOnly(cfg) ? 0 : 4), 0x7FA8B8);
+            if (EffectTriggers.lockedBy(s) != null) Hud.lock(g, (int) tx + isz / 2 + 4, (int) ty - isz / 2 - 2, 0xFFD23B); // 1.5.8 held by a trigger
             int rem = s.empty() || s.isFolder() || s.isGroup() || s.isCond() ? -1 : Actions.remaining(s.anim);
             if (rem >= 0) g.drawCenteredString(font, "\u23F1" + rem + "s", (int) tx, (int) ty + Math.max(8, isz / 2 + 2), 0xFFD23B);
         }
@@ -387,6 +392,8 @@ public class WheelScreen extends Screen {
         if (!CpmBridge.cpmPresent()) g.drawCenteredString(font, Component.translatable("cpmwheel.nocpm"), width / 2, height - 20, 0xFF3B5C);
         else g.drawString(font, Component.translatable("cpmwheel.hint"), 8, height - 20, 0x7FA8B8);
         super.render(g, mx, my, pt);
+        String lk = cs == null ? null : EffectTriggers.lockedBy(cs);
+        if (lk != null) g.renderTooltip(font, Component.translatable("cpmwheel.eff.locked", lk), mx, my);
     }
 
         private void renderPlayer(GuiGraphics g, float cx, float cy, float r0, int mx, int my) {
@@ -439,6 +446,8 @@ public class WheelScreen extends Screen {
         List<WheelConfig.Slot> sl = slots();
         if (hovered >= 0 && hovered < sl.size() && isValue(sl.get(hovered))) {
             WheelConfig.Slot s = sl.get(hovered);
+            String lk = EffectTriggers.lockedBy(s);
+            if (lk != null) { EffectTriggers.lockedFeedback(lk); return true; }
             if ("frames".equals(s.effectiveMode())) {
                 s.ensureFrames();
                 int k = Math.max(0, Math.min(s.frames.size() - 1, s.frameIndexOf(curVal(s)) + (d > 0 ? 1 : -1)));

@@ -83,6 +83,8 @@ public final class Actions {
     /** Play a slot outside the wheel (hotkey / inner ring). Value slots step to their next value. */
     public static void trigger(WheelConfig cfg, WheelConfig.Slot s) {
         if (s == null || s.empty() || s.isFolder()) return;
+        String lk = EffectTriggers.lockedBy(s);
+        if (lk != null) { EffectTriggers.lockedFeedback(lk); return; } // 1.5.8: held by a trigger
         int prior = WheelConfig.RESET.equals(s.anim) ? -1 : CpmBridge.playing(s.anim);
         if (s.isGroup() || s.isCond()) { WheelConfig.run(s); sound(cfg, 1.2f); return; }
         String m = WheelConfig.RESET.equals(s.anim) ? "toggle" : s.effectiveMode();
@@ -134,8 +136,9 @@ public final class Actions {
             for (WheelConfig.Slot s : bound) {
                 boolean d = InputConstants.isKeyDown(w, s.key) && m == (s.keyMods & 7);
                 if (d && !Boolean.TRUE.equals(BIND_DOWN.get(s))) {
+                    boolean locked = EffectTriggers.lockedBy(s) != null;
                     trigger(cached, s);
-                    mc.player.displayClientMessage(net.minecraft.network.chat.Component.literal("\u25B6 " + s.display()), true);
+                    if (!locked) mc.player.displayClientMessage(net.minecraft.network.chat.Component.literal("\u25B6 " + s.display()), true);
                 }
                 BIND_DOWN.put(s, d);
             }
@@ -151,8 +154,9 @@ public final class Actions {
                 WheelConfig.Page p = pages.get(Math.floorMod(cfg.lastPage, pages.size()));
                 if (i < p.slots.size()) {
                     WheelConfig.Slot s = p.slots.get(i);
+                    boolean locked = EffectTriggers.lockedBy(s) != null;
                     trigger(cfg, s);
-                    if (!s.empty() && !s.isFolder())
+                    if (!locked && !s.empty() && !s.isFolder())
                         mc.player.displayClientMessage(net.minecraft.network.chat.Component.literal("\u25B6 " + s.display()), true);
                 }
             }

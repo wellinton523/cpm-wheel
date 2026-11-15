@@ -202,6 +202,7 @@ public final class HandAnim {
             lanZ = Mth.clamp(lanZ, -45, 45); lanX = Mth.clamp(lanX, -45, 45);
         }
         pYaw = yaw; pPitch = pitch;
+        if (f(11)) HangPhysics.tick(p, dt); // 1.5.8 hanging physics (lanterns by default, any item/group/mod/type by choice)
         // stroke phases: tied to swim speed / climb speed
         net.minecraft.world.phys.Vec3 mv = p.getDeltaMovement();
         swimPhase = (swimPhase + dt * (0.45f + (float) mv.length() * 6f)) % 1f;
@@ -437,6 +438,7 @@ public final class HandAnim {
             m.computeIfAbsent(it, x -> new int[2][])["off".equals(k.substring(bar + 1)) ? 1 : 0] = e.getValue().clone();
         }
         ITEM_ADJ = m; MOD_ADJ = mods; ITEM_ARM = am; MOD_ARM = amods; GROUP_ADJ = gadj; GROUP_ARM = garm; itemOverrides = c.haItemOn;
+        HangPhysics.load(c);
     }
 
     static int cat(ItemStack s) {
@@ -531,28 +533,31 @@ public final class HandAnim {
         if (b[4] + a[4] != 0) ps.mulPose(Axis.XP.rotationDegrees(b[4] + a[4]));
         if (b[6] + a[6] != 0) ps.mulPose(Axis.ZP.rotationDegrees(f * (b[6] + a[6])));
         boolean flat = flatCats[c];
+        int phi = hand == InteractionHand.MAIN_HAND ? 0 : 1;
+        boolean hang = f(11) && HangPhysics.active(phi);
         if ((c == 9 || c == 10) && !flat) {
             net.minecraft.world.level.block.state.BlockState st = ((BlockItem) it).getBlock().defaultBlockState();
             if (c == 9) {
                 if (st.hasProperty(net.minecraft.world.level.block.LanternBlock.HANGING)) st = st.setValue(net.minecraft.world.level.block.LanternBlock.HANGING, true);
-                if (f(11)) { ps.mulPose(Axis.ZP.rotationDegrees(lanZ * f * 0.8f)); ps.mulPose(Axis.XP.rotationDegrees(lanX * 0.8f)); }
+                if (hang) HangPhysics.apply(ps, phi, f, sc);
                 ps.scale(sc, sc, sc);
                 ps.translate(-0.5f, -1.0f, -0.5f);   // chain top at the fist, lantern hangs below
             } else {
-                if (f(11)) ps.mulPose(Axis.ZP.rotationDegrees(lanZ * f * 0.15f));
+                if (hang) HangPhysics.apply(ps, phi, f, sc); else if (f(11)) ps.mulPose(Axis.ZP.rotationDegrees(lanZ * f * 0.15f));
                 ps.mulPose(Axis.XP.rotationDegrees(-10f));
                 ps.scale(sc, sc, sc);
                 ps.translate(-0.5f, -0.25f, -0.5f);  // grip a quarter up the stick
             }
             Minecraft.getInstance().getBlockRenderer().renderSingleBlock(st, ps, buf, light, net.minecraft.client.renderer.texture.OverlayTexture.NO_OVERLAY);
         } else if (c == 7 && !flat) {                         // blocks: upright, small, vanilla first-person block pose
+            if (hang) HangPhysics.apply(ps, phi, f, sc);
             ps.scale(sc, sc, sc);
             Minecraft.getInstance().getEntityRenderDispatcher().getItemInHandRenderer().renderItem(p, stack,
                     right ? net.minecraft.world.item.ItemDisplayContext.FIRST_PERSON_RIGHT_HAND : net.minecraft.world.item.ItemDisplayContext.FIRST_PERSON_LEFT_HAND,
                     !right, ps, buf, light);
         } else {                                     // everything else: held like third person, grip in the fist
-            if (c == 9 && f(11)) { ps.mulPose(Axis.ZP.rotationDegrees(lanZ * f * 0.8f)); ps.mulPose(Axis.XP.rotationDegrees(lanX * 0.8f)); }
-            if (c == 10 && f(11)) ps.mulPose(Axis.ZP.rotationDegrees(lanZ * f * 0.15f));
+            if (hang) HangPhysics.apply(ps, phi, f, sc);
+            else if (c == 10 && f(11)) ps.mulPose(Axis.ZP.rotationDegrees(lanZ * f * 0.15f));
             ps.mulPose(new org.joml.Quaternionf(GRIP));
             ps.scale(sc, sc, sc);
             Minecraft.getInstance().getEntityRenderDispatcher().getItemInHandRenderer().renderItem(p, stack,

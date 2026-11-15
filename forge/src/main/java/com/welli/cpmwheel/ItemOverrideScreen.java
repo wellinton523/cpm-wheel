@@ -52,6 +52,7 @@ public class ItemOverrideScreen extends Screen {
     }
 
     /** what the current target inherits (not counting its own value): label + values (null = zeros / category) */
+    private boolean hasPhys(String base) { return cfg.haPhys.containsKey(base + "|main") || cfg.haPhys.containsKey(base + "|off"); }
     private record Src(Component label, int[] values) {}
     private Src inherited() {
         if (mode.equals("item")) {
@@ -156,7 +157,7 @@ public class ItemOverrideScreen extends Screen {
         }
         if (mode.equals("group")) {
             addRenderableWidget(Button.builder(Component.translatable("cpmwheel.io.newgroup"), b -> {
-                WheelConfig.ItemGroup g = new WheelConfig.ItemGroup(); g.id = WheelConfig.newId("g"); g.mod = heldNs();
+                WheelConfig.ItemGroup g = new WheelConfig.ItemGroup(); g.id = WheelConfig.newId("g"); g.mod = heldNs(); g.kind = "query";
                 minecraft.setScreen(new GroupEditScreen(this, cfg, g, true)); }).bounds(x, y, 74, 20).build());
             addRenderableWidget(Button.builder(Component.translatable("cpmwheel.io.suggest"), b -> minecraft.setScreen(new GroupSuggestScreen(this, cfg, heldNs())))
                 .tooltip(Tooltip.create(Component.translatable("cpmwheel.io.suggest.help"))).bounds(x + 76, y, 74, 20).build()); y += 24;
@@ -171,7 +172,9 @@ public class ItemOverrideScreen extends Screen {
         page = Math.floorMod(page, pages);
         for (int i = page * per; i < Math.min(results.size(), (page + 1) * per); i++) {
             String r = results.get(i);
-            Button bt = Button.builder(Component.literal(rowLabel(r)), b -> { target = r; rebuildWidgets(); }).bounds(x, y, 150, 18).build();
+            Component lbl = Component.literal(rowLabel(r));
+            if (mode.equals("group")) { WheelConfig.ItemGroup rg = cfg.group(r); if (rg != null) lbl = Component.empty().append(Component.literal("\u25A0 ").withStyle(st -> st.withColor(rg.color))).append(lbl); }
+            Button bt = Button.builder(lbl, b -> { target = r; rebuildWidgets(); }).bounds(x, y, 150, 18).build();
             bt.active = !r.equals(target);
             addRenderableWidget(bt); y += 20;
         }
@@ -186,7 +189,12 @@ public class ItemOverrideScreen extends Screen {
         addRenderableWidget(Button.builder(Component.translatable("cpmwheel.io.enabled", cfg.haItemOn ? "ON" : "OFF"), b -> {
             cfg.haItemOn = !cfg.haItemOn; HandAnim.load(cfg); rebuildWidgets(); }).bounds(x2, ry, 150, 20).build()); ry += 22;
         addRenderableWidget(Button.builder(Component.translatable(off ? "cpmwheel.arm.off" : "cpmwheel.arm.main"), b -> { off = !off; rebuildWidgets(); }).bounds(x2, ry, 150, 20).build()); ry += 22;
-        addRenderableWidget(Button.builder(Component.translatable(armMode ? "cpmwheel.io.arm" : "cpmwheel.io.item"), b -> { armMode = !armMode; rebuildWidgets(); }).bounds(x2, ry, 150, 20).build()); ry += 46;
+        addRenderableWidget(Button.builder(Component.translatable(armMode ? "cpmwheel.io.arm" : "cpmwheel.io.item"), b -> { armMode = !armMode; rebuildWidgets(); }).bounds(x2, ry, 96, 20).build());
+        Button phys = Button.builder(Component.translatable(hasPhys(prefix() + target) ? "cpmwheel.phys.btn.set" : "cpmwheel.phys.btn"), b -> minecraft.setScreen(new PhysicsScreen(this, cfg, prefix() + target,
+                Component.literal(rowLabel(target).replace("\u2605 ", "")), off)))
+                .tooltip(Tooltip.create(Component.translatable("cpmwheel.phys.btn.help"))).bounds(x2 + 98, ry, 52, 20).build();
+        phys.active = !target.isEmpty();
+        addRenderableWidget(phys); ry += 46;
         srcLine = Component.empty(); groupsLine = Component.empty();
         if (!target.isEmpty()) {
             int[] own = cfg.haItem.get(key());

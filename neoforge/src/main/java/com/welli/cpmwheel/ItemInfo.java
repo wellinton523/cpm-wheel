@@ -23,4 +23,14 @@ final class ItemInfo {
     static String effectId(net.minecraft.world.effect.MobEffectInstance e) {
         try { return e.getEffect().unwrapKey().map(k -> k.location().toString()).orElse(""); } catch (Throwable t) { return ""; }
     }
+
+    /** 1.5.8 toasts: the effect's HUD icon */
+    static net.minecraft.client.renderer.texture.TextureAtlasSprite effectSprite(String id) {
+        try {
+            net.minecraft.resources.ResourceLocation rl = net.minecraft.resources.ResourceLocation.tryParse(id);
+            if (rl == null) return null;
+            var h = net.minecraft.core.registries.BuiltInRegistries.MOB_EFFECT.getHolder(rl);
+            return h.isPresent() ? net.minecraft.client.Minecraft.getInstance().getMobEffectTextures().get(h.get()) : null;
+        } catch (Throwable t) { return null; }
+    }
 }

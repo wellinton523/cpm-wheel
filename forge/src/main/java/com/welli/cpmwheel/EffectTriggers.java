@@ -17,15 +17,16 @@ import java.util.*;
  * Bookkeeping per animation ("hold"): the value before the first rule touched it + every active rule's value in order.
  * - several rules on the same animation: the most recent still-active rule wins; the original value only comes back
  *   when no active rule holds it any more;
- * - if you change a held animation yourself while the effect is on, the mod does not fight you: your value becomes
- *   the one restored at the end (so it simply stays as you left it);
+ * - 1.5.8 lock (per rule, on by default): the wheel buttons of held animations are locked and any outside change is
+ *   put back, so the end always restores the pre-trigger state; with the lock off, a manual change is kept and becomes
+ *   the value restored at the end (old behaviour);
  * - debounce: a rule starts after the effect was present for "delayStart" ms and ends after it was gone for "delayEnd" ms.
  * Client side only, checked every client tick.
  */
 public final class EffectTriggers {
     private EffectTriggers() {}
 
-    private static final class RState { boolean cond; long since; boolean active; long testUntil; String label = ""; String onEnd = "restore"; }
+    private static final class RState { boolean cond; long since; boolean active; long testUntil, testStart; String label = ""; String onEnd = "restore"; boolean lock = true; String effect = ""; }
     private static final class Hold { int original; int applied; long appliedAt; final LinkedHashMap<String, Integer> by = new LinkedHashMap<>(); }
 
     private static final Map<String, RState> RULES = new HashMap<>();
@@ -61,6 +62,38 @@ public final class EffectTriggers {
         RState s = RULES.computeIfAbsent(r.id, k -> new RState());
         long now = System.currentTimeMillis();
         s.testUntil = seconds <= 0 ? 0 : now + seconds * 1000L;
+        s.testStart = now;
+    }
+    /** "Testar" countdown for the toast timer bar (0..1), -1 when not testing */
+    public static float testFraction(String ruleId) {
+        RState s = RULES.get(ruleId);
+        long now = System.currentTimeMillis();
+        if (s == null || s.testUntil <= now || s.testUntil <= s.testStart) return -1;
+        return (s.testUntil - now) / (float) (s.testUntil - s.testStart);
+    }
+
+    // ---------- 1.5.8 lock: buttons of animations held by a trigger ----------
+    /** name of the active locking rule holding this animation, or null */
+    public static String lockedAnim(String anim) {
+        if (anim == null) return null;
+        Hold h = HOLDS.get(anim);
+        if (h == null) return null;
+        for (String id : h.by.keySet()) { RState s = RULES.get(id); if (s != null && s.active && s.lock) return s.label; }
+        return null;
+    }
+    /** name of the rule locking this wheel button (animation, group containing a held animation, reset), or null */
+    public static String lockedBy(WheelConfig.Slot s) {
+        if (s == null || s.empty() || s.isFolder() || HOLDS.isEmpty()) return null;
+        if (WheelConfig.RESET.equals(s.anim)) { for (String a : HOLDS.keySet()) { String l = lockedAnim(a); if (l != null) return l; } return null; }
+        if (s.isGroup()) { for (WheelConfig.Member m : s.groupList()) { String l = lockedAnim(m.anim); if (l != null) return l; } return null; }
+        if (s.isCond()) return null;
+        return lockedAnim(s.anim);
+    }
+    /** locked feedback: action bar + low click */
+    public static void lockedFeedback(String label) {
+        LocalPlayer p = Minecraft.getInstance().player;
+        if (p != null) p.displayClientMessage(Component.translatable("cpmwheel.eff.locked", label), true);
+        Actions.sound(WheelConfig.get(), 0.5f);
     }
 
     /** every client tick (Actions.tick) with the cached config */
@@ -80,7 +113,7 @@ public final class EffectTriggers {
             for (WheelConfig.EffectRule r : cfg.effRules) {
                 seen.add(r.id);
                 RState s = RULES.computeIfAbsent(r.id, k -> new RState());
-                s.label = ruleLabel(r); s.onEnd = r.onEnd;
+                s.label = ruleLabel(r); s.onEnd = r.onEnd; s.lock = r.lock; s.effect = r.effect;
                 Integer amp = eff.get(r.effect);
                 boolean want = cfg.effOn && r.on && ((amp != null && amp >= r.minAmp) || s.testUntil > now);
                 if (want != s.cond) { s.cond = want; s.since = now; }
@@ -107,6 +140,10 @@ public final class EffectTriggers {
             Hold h = e.getValue();
             if (now - h.appliedAt < 1000) continue;
             int cur = CpmBridge.playing(e.getKey());
+            if (cur >= 0 && cur != h.applied && lockedAnim(e.getKey()) != null) { // locked: put the trigger's value back
+                CpmBridge.play(e.getKey(), h.applied); h.appliedAt = now;
+                continue;
+            }
             if (cur >= 0 && cur != h.applied) {
                 h.original = cur; h.applied = cur; h.appliedAt = now;
                 for (var k : h.by.keySet()) h.by.put(k, cur);
@@ -128,7 +165,7 @@ public final class EffectTriggers {
         }
         markGroups(cfg, r.actions, true);
         Hud.invalidate();
-        if (r.notify) notice(Component.translatable("cpmwheel.eff.notice.on", s.label));
+        if (r.notify) TriggerToasts.start(r.id, r.effect, s.label, effectName(r.effect) + " \u2192 " + changes(r), color(cfg, r));
     }
 
     private static void end(WheelConfig cfg, String ruleId, RState s, boolean notify, long now) {
@@ -148,12 +185,34 @@ public final class EffectTriggers {
         }
         if (cfg != null) for (WheelConfig.EffectRule r : cfg.effRules) if (r.id.equals(ruleId)) markGroups(cfg, r.actions, false);
         Hud.invalidate();
-        if (notify) notice(Component.translatable(restore ? "cpmwheel.eff.notice.off" : "cpmwheel.eff.notice.offkeep", s.label));
+        if (notify) {
+            WheelConfig.EffectRule rr = null;
+            if (cfg != null) for (WheelConfig.EffectRule r : cfg.effRules) if (r.id.equals(ruleId)) rr = r;
+            TriggerToasts.end(ruleId, s.effect, s.label, Component.translatable(restore ? "cpmwheel.toast.end" : "cpmwheel.toast.endkeep").getString(),
+                    rr == null ? 0x3BFF9D : color(cfg, rr));
+        }
     }
 
-    private static void notice(Component c) {
-        LocalPlayer p = Minecraft.getInstance().player;
-        if (p != null) p.displayClientMessage(c, true);
+    /** "Humano desativado, chifres ativado" */
+    static String changes(WheelConfig.EffectRule r) {
+        StringBuilder sb = new StringBuilder();
+        for (WheelConfig.EffectAction a : r.actions) {
+            if (sb.length() > 0) sb.append(", ");
+            String t = a.target.startsWith("group:") ? a.target.substring(6) : targetName(a.target);
+            sb.append(t).append(' ').append(Component.translatable("cpmwheel.toast.op." + a.op).getString());
+        }
+        return sb.length() == 0 ? Component.translatable("cpmwheel.eff.noactions").getString() : sb.toString();
+    }
+    /** colour of the first wheel button the rule touches (group or animation), else the wheel accent */
+    static int color(WheelConfig cfg, WheelConfig.EffectRule r) {
+        if (cfg != null) for (WheelConfig.EffectAction a : r.actions) {
+            if (a.target.startsWith("group:")) { WheelConfig.Slot g = cfg.groupSlot(a.target.substring(6)); if (g != null && g.color != 0) return g.color; }
+            else if (a.target.startsWith("anim:")) {
+                String an = a.target.substring(5);
+                for (WheelConfig.Slot s : cfg.allSlots()) if (an.equals(s.anim) && !s.isGroup() && s.color != 0) return s.color;
+            }
+        }
+        try { return Style.accent(cfg); } catch (Throwable t) { return 0x2EE6FF; }
     }
 
     /** group buttons: keep their on/off flag in sync for the HUD (values come from resolve) */

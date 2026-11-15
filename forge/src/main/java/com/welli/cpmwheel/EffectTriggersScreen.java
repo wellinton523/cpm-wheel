@@ -73,7 +73,9 @@ public class EffectTriggersScreen extends Screen {
             delay(x2, y2, "cpmwheel.eff.delaystart", rule.delayStart, v -> rule.delayStart = v); y2 += 22;
             delay(x2, y2, "cpmwheel.eff.delayend", rule.delayEnd, v -> rule.delayEnd = v); y2 += 22;
             addRenderableWidget(Button.builder(Component.translatable("cpmwheel.eff.notify", onoff(rule.notify)), b -> { rule.notify = !rule.notify; rebuildWidgets(); })
-                    .tooltip(tip("cpmwheel.eff.notify.help")).bounds(x2, y2, 150, 20).build()); y2 += 22;
+                    .tooltip(tip("cpmwheel.eff.notify.help")).bounds(x2, y2, 74, 20).build());
+            addRenderableWidget(Button.builder(Component.translatable("cpmwheel.eff.lock", onoff(rule.lock)), b -> { rule.lock = !rule.lock; rebuildWidgets(); })
+                    .tooltip(tip("cpmwheel.eff.lock.help")).bounds(x2 + 76, y2, 74, 20).build()); y2 += 22;
             boolean testing = EffectTriggers.isTesting(rule.id);
             addRenderableWidget(Button.builder(Component.translatable(testing ? "cpmwheel.eff.test.stop" : "cpmwheel.eff.test"), b -> {
                 EffectTriggers.test(rule, EffectTriggers.isTesting(rule.id) ? 0 : 5); rebuildWidgets(); })

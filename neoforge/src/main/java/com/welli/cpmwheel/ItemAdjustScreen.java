@@ -42,6 +42,9 @@ public class ItemAdjustScreen extends Screen {
             addRenderableWidget(Button.builder(Component.translatable(flat ? "cpmwheel.adj.r2d" : "cpmwheel.adj.r3d"), b -> {
                 if (!cfg.haFlat.remove(cat)) cfg.haFlat.add(cat); HandAnim.load(cfg); rebuildWidgets(); }).bounds(x2, 26 + 44, 150, 20).build());
         }
+        addRenderableWidget(Button.builder(Component.translatable("cpmwheel.phys.btn.type"), b -> minecraft.setScreen(new PhysicsScreen(this, cfg, "cat:" + cat,
+                Component.translatable("cpmwheel.phys.what.type", Component.translatable("cpmwheel.adj.c." + cat)), false)))
+                .tooltip(net.minecraft.client.gui.components.Tooltip.create(Component.translatable("cpmwheel.phys.btn.help"))).bounds(x2, 26 + 66, 150, 20).build());
         addRenderableWidget(Button.builder(Component.translatable("cpmwheel.adj.reset"), b -> { cfg.haAdj.remove(cat); HandAnim.load(cfg); rebuildWidgets(); }).bounds(x, y, 150, 20).build());
         int ry = 26;
         addRenderableWidget(Button.builder(Component.translatable("cpmwheel.adj.vanilla", cfg.haVanillaItem ? "ON" : "OFF"),
@@ -55,7 +58,7 @@ public class ItemAdjustScreen extends Screen {
     public void render(GuiGraphics g, int mx, int my, float pt) {
         g.fill(0, 0, width, height, 0x60050A12); // light backdrop so the hand stays visible while tuning
         g.drawString(font, title, 8, 10, Style.accent(cfg));
-        g.drawWordWrap(font, Component.translatable("cpmwheel.adj.help"), 162, 26 + 72, 150, 0x9FB8C8);
+        g.drawWordWrap(font, Component.translatable("cpmwheel.adj.help"), 162, 26 + 92, 150, 0x9FB8C8);
         super.render(g, mx, my, pt);
     }
 

@@ -30,6 +30,10 @@ public class CpmWheel {
     public static final KeyMapping KEY_HUD = new KeyMapping("key.cpmwheel.hud",
             InputConstants.Type.KEYSYM, GLFW.GLFW_KEY_H, "key.categories.cpmwheel");
 
+    /** 1.5.8: HUD edit mode (drag the HUD elements); unbound by default */
+    public static final KeyMapping KEY_HUD_EDIT = new KeyMapping("key.cpmwheel.hudedit",
+            InputConstants.Type.KEYSYM, InputConstants.UNKNOWN.getValue(), "key.categories.cpmwheel");
+
     public CpmWheel(IEventBus bus, ModContainer container, Dist dist) {
         if (dist != Dist.CLIENT) return;
         bus.addListener(this::keys);
@@ -50,6 +54,7 @@ public class CpmWheel {
         e.register(KEY_WHEEL);
         e.register(KEY_EDIT);
         e.register(KEY_HUD);
+        e.register(KEY_HUD_EDIT);
     }
 
     private void imc(InterModEnqueueEvent e) {
@@ -70,6 +75,9 @@ public class CpmWheel {
                 c.hudEnabled = !c.hudEnabled; c.save(); Hud.invalidate();
                 mc.player.displayClientMessage(net.minecraft.network.chat.Component.translatable("cpmwheel.hud.toggled", c.hudEnabled ? "ON" : "OFF"), true);
             }
+        }
+        while (KEY_HUD_EDIT.consumeClick()) {
+            if (mc.screen == null && mc.player != null) mc.setScreen(new HudEditScreen(null));
         }
         while (KEY_EDIT.consumeClick()) {
             if (mc.screen == null && mc.player != null) mc.setScreen(new EditScreen(null));

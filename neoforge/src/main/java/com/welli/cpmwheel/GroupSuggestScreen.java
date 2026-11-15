@@ -40,8 +40,8 @@ public class GroupSuggestScreen extends Screen {
             addRenderableWidget(Button.builder(l, b -> {
                 WheelConfig.ItemGroup g = ItemGroups.fromSuggestion(s, ns);
                 for (WheelConfig.ItemGroup e : cfg.haGroups) if (e.kind.equals(g.kind) && e.value.equals(g.value) && e.mod.equals(g.mod)) { parent.selectGroup(e.id); minecraft.setScreen(parent); return; }
-                cfg.haGroups.add(g); cfg.fixup(); HandAnim.load(cfg);
-                parent.selectGroup(g.id); minecraft.setScreen(parent);
+                // 1.5.8: open the "Criar grupo" screen already filled in, so the result can be checked before saving
+                minecraft.setScreen(new GroupEditScreen(parent, cfg, g, true));
             }).bounds(x, y, w, 20).build());
             y += 22;
         }
