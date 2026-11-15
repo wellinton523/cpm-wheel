@@ -64,6 +64,7 @@ public final class Actions {
     /** after a slot was played: remember it, schedule timed revert, click sound */
     public static void played(WheelConfig cfg, WheelConfig.Slot s, int prior) {
         if (s == null || s.empty() || s.isFolder()) return;
+        Sounds.slot(cfg, s, prior); // 1.6.0 button sound
         cfg.addRecent(s.anim);
         if (s.duration > 0 && !WheelConfig.RESET.equals(s.anim) && "toggle".equals(s.effectiveMode())) {
             TIMERS.removeIf(t -> t.anim.equals(s.anim));
@@ -86,7 +87,7 @@ public final class Actions {
         String lk = EffectTriggers.lockedBy(s);
         if (lk != null) { EffectTriggers.lockedFeedback(lk); return; } // 1.5.8: held by a trigger
         int prior = WheelConfig.RESET.equals(s.anim) ? -1 : CpmBridge.playing(s.anim);
-        if (s.isGroup() || s.isCond()) { WheelConfig.run(s); sound(cfg, 1.2f); return; }
+        if (s.isGroup() || s.isCond()) { WheelConfig.run(s); sound(cfg, 1.2f); Sounds.slot(cfg, s, prior); return; }
         String m = WheelConfig.RESET.equals(s.anim) ? "toggle" : s.effectiveMode();
         int cur = prior < 0 ? s.minV() : prior;
         switch (m) {

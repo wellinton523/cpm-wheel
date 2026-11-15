@@ -127,7 +127,11 @@ public class EditScreen extends Screen {
                 String conflict = keyConflict(s);
                 Component kl = capture == s ? Component.translatable("cpmwheel.edit.key.press")
                         : Component.literal((conflict != null ? "\u26A0 " : "")).append(Component.translatable("cpmwheel.edit.key", Actions.keyName(s.key, s.keyMods)));
-                Button kb = Button.builder(kl, b -> { capture = s; rebuildWidgets(); }).bounds(px, y, 160, 18).build();
+                Button kb = Button.builder(kl, b -> { capture = s; rebuildWidgets(); }).bounds(px, y, 112, 18).build();
+                boolean hasSnd = s.sound != null && !s.sound.empty();
+                addRenderableWidget(Button.builder(Component.translatable(hasSnd ? "cpmwheel.snd.btn.set" : "cpmwheel.snd.btn"), b -> minecraft.setScreen(new SoundEditScreen(this, cfg,
+                        Component.literal(s.display()), s.sound, false, v -> s.sound = v)))
+                        .tooltip(net.minecraft.client.gui.components.Tooltip.create(Component.translatable("cpmwheel.snd.btn.help"))).bounds(px + 114, y, 46, 18).build());
                 kb.setTooltip(net.minecraft.client.gui.components.Tooltip.create(conflict != null
                         ? Component.translatable("cpmwheel.edit.key.conflict", conflict) : Component.translatable("cpmwheel.edit.key.help")));
                 addRenderableWidget(kb); y += 22;

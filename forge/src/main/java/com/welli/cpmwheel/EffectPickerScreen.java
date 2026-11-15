@@ -14,12 +14,15 @@ public class EffectPickerScreen extends Screen {
     private final Screen parent;
     private final WheelConfig cfg;
     private final WheelConfig.EffectRule rule;
+    private java.util.function.Consumer<String> pick; private String current = "";
     private final List<String> all = EffectTriggers.allEffects();
     private final List<String> shown = new ArrayList<>();
     private String query = "";
     private int page = 0;
 
     public EffectPickerScreen(Screen parent, WheelConfig cfg, WheelConfig.EffectRule rule) { super(Component.translatable("cpmwheel.eff.pick")); this.parent = parent; this.cfg = cfg; this.rule = rule; }
+    /** 1.6.0: pick for a condition */
+    public EffectPickerScreen(Screen parent, WheelConfig cfg, String current, java.util.function.Consumer<String> pick) { this(parent, cfg, null); this.pick = pick; this.current = current == null ? "" : current; }
 
     @Override
     protected void init() {
@@ -38,8 +41,8 @@ public class EffectPickerScreen extends Screen {
         page = Math.floorMod(page, pages);
         for (int i = page * per; i < Math.min(shown.size(), (page + 1) * per); i++) {
             String id = shown.get(i);
-            Button b = Button.builder(Component.literal(EffectTriggers.effectName(id) + "  \u00A77" + id), bt -> { rule.effect = id; minecraft.setScreen(parent); }).bounds(x, y, w, 18).build();
-            b.active = !id.equals(rule.effect);
+            Button b = Button.builder(Component.literal(EffectTriggers.effectName(id) + "  \u00A77" + id), bt -> { if (pick != null) pick.accept(id); else rule.effect = id; minecraft.setScreen(parent); }).bounds(x, y, w, 18).build();
+            b.active = !id.equals(pick != null ? current : rule.effect);
             addRenderableWidget(b); y += 20;
         }
         if (pages > 1) {

@@ -31,8 +31,14 @@ public class EffectTriggersScreen extends Screen {
         if (r == null && !cfg.effRules.isEmpty()) { r = cfg.effRules.get(0); selected = r.id; }
         addRenderableWidget(Button.builder(Component.translatable("cpmwheel.eff.master", onoff(cfg.effOn)), b -> { cfg.effOn = !cfg.effOn; rebuildWidgets(); })
                 .tooltip(tip("cpmwheel.eff.master.help")).bounds(x, y, 150, 20).build()); y += 22;
+        // 1.6.0 global switches
+        addRenderableWidget(Button.builder(Component.translatable("cpmwheel.eff.condson", onoff(cfg.trigCondsOn)), b -> { cfg.trigCondsOn = !cfg.trigCondsOn; rebuildWidgets(); })
+                .tooltip(tip("cpmwheel.eff.condson.help")).bounds(x, y, 74, 20).build());
+        addRenderableWidget(Button.builder(Component.translatable("cpmwheel.eff.transon", onoff(cfg.trigTransOn)), b -> { cfg.trigTransOn = !cfg.trigTransOn; rebuildWidgets(); })
+                .tooltip(tip("cpmwheel.eff.transon.help")).bounds(x + 76, y, 74, 20).build()); y += 22;
         addRenderableWidget(Button.builder(Component.translatable("cpmwheel.eff.add"), b -> {
             WheelConfig.EffectRule n = new WheelConfig.EffectRule(); n.id = WheelConfig.newId("r");
+            n.effect = "minecraft:poison"; n.conds.add(new TriggerLogic.Cond("effect", "minecraft:poison", 0));
             cfg.effRules.add(n); selected = n.id; confirmDelete = false; rebuildWidgets(); })
             .tooltip(tip("cpmwheel.eff.add.help")).bounds(x, y, 150, 20).build()); y += 24;
         int per = Math.max(3, (height - 30 - y) / 20);
@@ -60,12 +66,15 @@ public class EffectTriggersScreen extends Screen {
             addRenderableWidget(name); y2 += 22;
             addRenderableWidget(Button.builder(Component.translatable("cpmwheel.eff.on", onoff(rule.on)), b -> { rule.on = !rule.on; rebuildWidgets(); })
                     .tooltip(tip("cpmwheel.eff.on.help")).bounds(x2, y2, 150, 20).build()); y2 += 22;
-            addRenderableWidget(Button.builder(Component.translatable("cpmwheel.eff.effect", EffectTriggers.effectName(rule.effect)), b -> minecraft.setScreen(new EffectPickerScreen(this, cfg, rule)))
-                    .tooltip(Tooltip.create(Component.translatable("cpmwheel.eff.effect.help").append("\n" + rule.effect))).bounds(x2, y2, 150, 20).build()); y2 += 22;
-            addRenderableWidget(new AbstractSliderButton(x2, y2, 150, 20, ampMsg(rule.minAmp), rule.minAmp / 9.0) {
-                @Override protected void updateMessage() { setMessage(ampMsg(rule.minAmp)); }
-                @Override protected void applyValue() { rule.minAmp = (int) Math.round(value * 9); }
-            });
+            // 1.6.0: conditions (effect, health, biome...) + transition and sound
+            addRenderableWidget(Button.builder(Component.translatable("cpmwheel.eff.conds", rule.conds.size()), b -> minecraft.setScreen(new CondEditScreen(this, cfg, rule)))
+                    .tooltip(Tooltip.create(Component.translatable("cpmwheel.eff.conds.help").append("\n\n" + EffectTriggers.condsText(rule)))).bounds(x2, y2, 150, 20).build()); y2 += 22;
+            boolean hasT = rule.transAnim != null && !rule.transAnim.isBlank(), hasS = rule.sound != null && !rule.sound.empty();
+            addRenderableWidget(Button.builder(Component.translatable(hasT ? "cpmwheel.eff.trans.set" : "cpmwheel.eff.trans"), b -> minecraft.setScreen(new TransitionScreen(this, cfg, rule)))
+                    .tooltip(tip("cpmwheel.eff.trans.help")).bounds(x2, y2, 74, 20).build());
+            addRenderableWidget(Button.builder(Component.translatable(hasS ? "cpmwheel.snd.btn.rule.set" : "cpmwheel.snd.btn.rule"), b -> minecraft.setScreen(new SoundEditScreen(this, cfg,
+                    Component.literal(EffectTriggers.ruleLabel(rule)), rule.sound, true, v -> rule.sound = v)))
+                    .tooltip(tip("cpmwheel.snd.btn.rule.help")).bounds(x2 + 76, y2, 74, 20).build());
             y2 += 22;
             addRenderableWidget(Button.builder(Component.translatable("cpmwheel.eff.end", Component.translatable("cpmwheel.eff.end." + rule.onEnd)), b -> {
                 rule.onEnd = "restore".equals(rule.onEnd) ? "none" : "restore"; rebuildWidgets(); })
@@ -115,6 +124,7 @@ public class EffectTriggersScreen extends Screen {
             final WheelConfig.Slot eg = grp;
             addRenderableWidget(Button.builder(Component.translatable("cpmwheel.eff.example", eg == null ? "-" : eg.display()), b -> {
                 WheelConfig.EffectRule n = new WheelConfig.EffectRule(); n.id = WheelConfig.newId("r"); n.effect = "minecraft:poison";
+                n.conds.add(new TriggerLogic.Cond("effect", "minecraft:poison", 0));
                 if (eg != null) n.actions.add(new WheelConfig.EffectAction("group:" + eg.display(), "off"));
                 cfg.effRules.add(n); selected = n.id; rebuildWidgets(); }).bounds(164, 60, 220, 20).build());
         }

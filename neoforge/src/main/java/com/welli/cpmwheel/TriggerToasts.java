@@ -22,29 +22,30 @@ public final class TriggerToasts {
     private static final int W = 172, H = 30, MINI_H = 14, GAP = 3, IN_MS = 260, OUT_MS = 320;
 
     private static final class T {
-        String ruleId, effect, title, text; int color; boolean end;
+        String ruleId, effect, icon = "", title, text; int color; boolean end;
         long start, dur; long outAt = -1; int maxDur = 1;
         float hNow = H;
     }
     private static final List<T> LIST = new ArrayList<>();
 
     /** effect started: icon + rule name + "Veneno → Humano desativado" */
-    public static void start(String ruleId, String effect, String title, String text, int color) {
+    public static void start(String ruleId, String effect, String title, String text, int color) { start(ruleId, effect, "", title, text, color); }
+    public static void start(String ruleId, String effect, String icon, String title, String text, int color) {
         WheelConfig c = WheelConfig.get();
         if (!c.toastOn) return;
         for (T t : LIST) if (ruleId.equals(t.ruleId) && t.outAt < 0) t.outAt = System.currentTimeMillis();
-        T t = new T(); t.ruleId = ruleId; t.effect = effect; t.title = title; t.text = text; t.color = color;
+        T t = new T(); t.ruleId = ruleId; t.effect = effect; t.icon = icon; t.title = title; t.text = text; t.color = color;
         t.start = System.currentTimeMillis(); t.dur = c.toastSecs * 1000L;
         LIST.add(t);
         while (LIST.size() > 6) LIST.remove(0);
     }
     /** effect ended: the start toast leaves, "Efeito acabou → restaurado" comes in */
-    public static void end(String ruleId, String effect, String title, String text, int color) {
+    public static void end(String ruleId, String effect, String icon, String title, String text, int color) {
         long now = System.currentTimeMillis();
         for (T t : LIST) if (ruleId.equals(t.ruleId) && !t.end && t.outAt < 0) t.outAt = now;
         WheelConfig c = WheelConfig.get();
         if (!c.toastOn) return;
-        T t = new T(); t.ruleId = ruleId; t.effect = effect; t.title = title; t.text = text; t.color = color; t.end = true;
+        T t = new T(); t.ruleId = ruleId; t.effect = effect; t.icon = icon; t.title = title; t.text = text; t.color = color; t.end = true;
         t.start = now; t.dur = Math.max(1500L, c.toastSecs * 750L);
         LIST.add(t);
         while (LIST.size() > 6) LIST.remove(0);
@@ -127,6 +128,16 @@ public final class TriggerToasts {
                 RenderSystem.setShaderColor(1, 1, 1, a);
                 g.blit(6, (h - is) / 2, 0, is, is, sp);
                 RenderSystem.setShaderColor(1, 1, 1, 1);
+            } else if (t.icon != null && !t.icon.isEmpty() && a > 0.5f) {               // 1.6.0: item icon for non-effect triggers
+                var rl = net.minecraft.resources.ResourceLocation.tryParse(t.icon);
+                var item = rl == null ? null : net.minecraft.core.registries.BuiltInRegistries.ITEM.get(rl);
+                if (item != null) {
+                    g.pose().pushPose();
+                    g.pose().translate(6, (h - is) / 2f, 0);
+                    g.pose().scale(is / 16f, is / 16f, 1);
+                    g.renderItem(new net.minecraft.world.item.ItemStack(item), 0, 0);
+                    g.pose().popPose();
+                }
             }
             int tx = 6 + is + 5;
             if (mini) {

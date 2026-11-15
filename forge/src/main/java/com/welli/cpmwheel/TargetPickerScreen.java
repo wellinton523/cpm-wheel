@@ -22,6 +22,13 @@ public class TargetPickerScreen extends Screen {
     private String query = "";
     private int page = 0;
 
+    private java.util.function.Consumer<String> animPick;
+    /** 1.6.0: pick only an animation (transition animation) */
+    public TargetPickerScreen(Screen parent, WheelConfig cfg, java.util.function.Consumer<String> animPick) {
+        this(parent, cfg, null, null);
+        this.animPick = animPick;
+        all.keySet().removeIf(k -> !k.startsWith("anim:"));
+    }
     public TargetPickerScreen(Screen parent, WheelConfig cfg, WheelConfig.EffectRule rule, WheelConfig.EffectAction editing) {
         super(Component.translatable("cpmwheel.eff.tpick")); this.parent = parent; this.cfg = cfg; this.rule = rule; this.editing = editing;
         for (WheelConfig.Slot s : cfg.allSlots()) if (s.isGroup()) all.putIfAbsent("group:" + s.display(), Component.translatable("cpmwheel.eff.t.group", s.display()).getString());
@@ -49,7 +56,8 @@ public class TargetPickerScreen extends Screen {
         for (int i = page * per; i < Math.min(shown.size(), (page + 1) * per); i++) {
             String t = shown.get(i);
             addRenderableWidget(Button.builder(Component.literal(all.get(t)), b -> {
-                if (editing != null) editing.target = t;
+                if (animPick != null) animPick.accept(t.substring(5));
+                else if (editing != null) editing.target = t;
                 else rule.actions.add(new WheelConfig.EffectAction(t, "off"));
                 minecraft.setScreen(parent);
             }).bounds(x, y, w, 18).build());

@@ -12,7 +12,16 @@ public class WheelConfig {
     public static final String RESET = "@reset";
     public static final int[] PALETTE = {0x2EE6FF, 0x4D7CFF, 0xFF3B5C, 0xB46CFF, 0x3BFF9D, 0xFFD23B, 0xFFFFFF, 0x8A97A8};
 
+    /** 1.6.0 optional sound: on activate (id) and optionally on restore / turning off (endId); volume and pitch in % */
+    public static class SoundSpec {
+        public String id = "", endId = "";
+        public int vol = 100, pitch = 100;
+        public boolean empty() { return (id == null || id.isBlank()) && (endId == null || endId.isBlank()); }
+    }
+
     public static class Slot {
+        /** 1.6.0: optional sound for this button (null = none) */
+        public SoundSpec sound = null;
         public String anim = "";
         public String label = "";
         public int color = 0x2EE6FF;
@@ -205,6 +214,15 @@ public class WheelConfig {
         public boolean notify = true;
         /** 1.5.8: while active, the wheel buttons of the animations it holds are locked (no manual change; restore = pre-trigger state) */
         public boolean lock = true;
+        /** 1.6.0: conditions (effect, health, night, rain, biome, ...) combined with "and" / "or"; replaces effect/minAmp (kept for the icon) */
+        public List<TriggerLogic.Cond> conds = new ArrayList<>();
+        public String combine = "and";
+        /** 1.6.0 timed transition: animation played for transMs before switching (and optionally before restoring) */
+        public String transAnim = "";
+        public int transMs = 1000;
+        public boolean transOnEnd = false;
+        /** 1.6.0: optional sound when the rule starts (id) / restores (endId) */
+        public SoundSpec sound = null;
     }
 
     /** 1.5.8 movable HUD element: anchor (tl tc tr ml mc mr bl bc br) + offset in GUI pixels + scale % */
@@ -250,7 +268,9 @@ public class WheelConfig {
     public String centerMode = "player";
     /** center size in percent (50-200) */
     public int centerSize = 100;
-    public int configVersion = 18;
+    public int configVersion = 19;
+    /** 1.6.0 global switches: extra trigger conditions, timed transitions, custom sounds (per-button / per-rule sounds) */
+    public boolean trigCondsOn = true, trigTransOn = true, customSounds = true;
     private static final String LEGACY_DESIGN = "signalis";
     /** HUD grouped by wheel/folder with nested bars; false = flat list */
     public boolean hudGrouped = true;
@@ -369,6 +389,8 @@ public class WheelConfig {
                     if (c.configVersion < 17) { c.configVersion = 17; c.toastOn = true; c.toastSecs = 4; c.toastOpacity = 85; c.toastMini = true; c.hudSnap = true;
                         if (c.effRules != null) for (EffectRule r : c.effRules) if (r != null) r.lock = true; } // 1.5.8: query groups, physics, movable HUD (list position from the old corner), toasts, trigger lock
                     if (c.configVersion < 18) c.configVersion = 18; // 1.5.9: physics with gravity (old arrays upgraded in fixup), "Igual nas duas mãos"
+                    if (c.configVersion < 19) { c.configVersion = 19; c.trigCondsOn = true; c.trigTransOn = true; c.customSounds = true; // 1.6.0: effect rules -> condition lists
+                        if (c.effRules != null) for (EffectRule r : c.effRules) if (r != null) migrateRule(r); }
                     c.fixup();
                     if (c.centerMode == null || c.centerMode.isBlank()) c.centerMode = "player";
                     if (c.hudCorner == null || c.hudCorner.isBlank()) c.hudCorner = "top_left";
@@ -394,6 +416,19 @@ public class WheelConfig {
         v = v.trim(); if (v.startsWith("#")) v = v.substring(1);
         if (!v.matches("[0-9a-fA-F]{6}")) return -1;
         return Integer.parseInt(v, 16);
+    }
+
+    /** 1.6.0: a 1.5.x rule (one effect + min level) becomes a rule with one "effect" condition; nothing else changes */
+    static void migrateRule(EffectRule r) {
+        if (r.conds == null) r.conds = new ArrayList<>();
+        if (r.conds.isEmpty() && r.effect != null && !r.effect.isBlank()) r.conds.add(new TriggerLogic.Cond("effect", r.effect, Math.max(0, r.minAmp)));
+        if (r.combine == null) r.combine = "and";
+    }
+
+    static void fixSound(SoundSpec sp) {
+        if (sp == null) return;
+        if (sp.id == null) sp.id = ""; if (sp.endId == null) sp.endId = "";
+        sp.vol = clamp(sp.vol, 0, 200); sp.pitch = clamp(sp.pitch <= 0 ? 100 : sp.pitch, 50, 200);
     }
 
     void fixup() {
@@ -451,7 +486,16 @@ public class WheelConfig {
             if (r.actions == null) r.actions = new ArrayList<>();
             r.actions.removeIf(a -> a == null || a.target == null || a.target.isBlank());
             for (EffectAction a : r.actions) if (!java.util.Arrays.asList("on", "off", "toggle").contains(a.op)) a.op = "off";
+            if (r.conds == null) r.conds = new ArrayList<>();
+            r.conds.removeIf(c -> c == null || !java.util.Arrays.asList(TriggerLogic.TYPES).contains(c.type));
+            for (TriggerLogic.Cond c : r.conds) { if (c.value == null) c.value = ""; c.num = clamp(c.num, 0, 255); }
+            if (!"or".equals(r.combine)) r.combine = "and";
+            for (TriggerLogic.Cond c : r.conds) if ("effect".equals(c.type) && !c.value.isBlank()) { r.effect = c.value; r.minAmp = c.num; break; } // icon / old readers
+            if (r.transAnim == null) r.transAnim = "";
+            r.transMs = clamp(r.transMs <= 0 ? 1000 : r.transMs, 100, 10000);
+            fixSound(r.sound);
         }
+        for (Slot sl : allSlots()) fixSound(sl.sound);
         if (haArm == null) haArm = new java.util.HashMap<>();
         haArm.entrySet().removeIf(e -> !("main".equals(e.getKey()) || "off".equals(e.getKey())) || e.getValue() == null || e.getValue().length != 7);
         haAdj.entrySet().removeIf(e -> e.getKey() == null || e.getValue() == null || e.getValue().length != 7 || java.util.Arrays.asList(HandAnim.CATS).indexOf(e.getKey()) < 0);

@@ -26,7 +26,13 @@ import java.util.*;
 public final class EffectTriggers {
     private EffectTriggers() {}
 
-    private static final class RState { boolean cond; long since; boolean active; long testUntil, testStart; String label = ""; String onEnd = "restore"; boolean lock = true; String effect = ""; }
+    private static final class RState {
+        final TriggerLogic.Debounce db = new TriggerLogic.Debounce();
+        boolean active; // actions applied
+        long testUntil, testStart; String label = ""; String onEnd = "restore"; boolean lock = true; String effect = "", icon = "";
+        /** 1.6.0 timed transition: "" / "in" (before applying) / "out" (before restoring); transition animation and its previous value */
+        String phase = ""; long phaseUntil; String transAnim = ""; int transPrev = -1;
+    }
     private static final class Hold { int original; int applied; long appliedAt; final LinkedHashMap<String, Integer> by = new LinkedHashMap<>(); }
 
     private static final Map<String, RState> RULES = new HashMap<>();
@@ -50,7 +56,7 @@ public final class EffectTriggers {
     }
 
     public static String ruleLabel(WheelConfig.EffectRule r) {
-        return r.name != null && !r.name.isBlank() ? r.name : effectName(r.effect);
+        return r.name != null && !r.name.isBlank() ? r.name : condsText(r);
     }
 
     /** is this rule currently applied (for the editor) */
@@ -103,27 +109,41 @@ public final class EffectTriggers {
         if (p == null) return; // world change / respawn screen: keep holds, they are released once the player is back
         try {
             long now = System.currentTimeMillis();
-            Map<String, Integer> eff = new HashMap<>();
-            for (MobEffectInstance e : p.getActiveEffects()) {
-                String id = ItemInfo.effectId(e);
-                if (!id.isEmpty()) eff.merge(id, e.getAmplifier(), Math::max);
-            }
-            if (p.isDeadOrDying()) eff.clear();
+            TriggerLogic.Snapshot snap = cfg.effRules.isEmpty() ? null : snapshot(p, cfg, now);
             Set<String> seen = new HashSet<>();
             for (WheelConfig.EffectRule r : cfg.effRules) {
                 seen.add(r.id);
                 RState s = RULES.computeIfAbsent(r.id, k -> new RState());
-                s.label = ruleLabel(r); s.onEnd = r.onEnd; s.lock = r.lock; s.effect = r.effect;
-                Integer amp = eff.get(r.effect);
-                boolean want = cfg.effOn && r.on && ((amp != null && amp >= r.minAmp) || s.testUntil > now);
-                if (want != s.cond) { s.cond = want; s.since = now; }
-                if (want && !s.active && now - s.since >= (s.testUntil > now ? 0 : r.delayStart)) start(cfg, r, s, now);
-                else if (!want && s.active && (now - s.since >= r.delayEnd || !cfg.effOn || !r.on)) end(cfg, r.id, s, r.notify, now);
+                s.onEnd = r.onEnd; s.lock = r.lock;
+                boolean extraOk = cfg.trigCondsOn || r.conds.stream().allMatch(c -> "effect".equals(c.type)); // "Condições extras" off: only effect rules run
+                boolean testing = s.testUntil > now;
+                boolean enabled = cfg.effOn && r.on;
+                boolean want = enabled && (testing || (extraOk && snap != null && TriggerLogic.eval(r.conds, r.combine, snap)));
+                int ev = s.db.update(want, now, testing ? 0 : r.delayStart, enabled ? r.delayEnd : 0);
+                boolean trans = cfg.trigTransOn && r.transAnim != null && !r.transAnim.isBlank();
+                if (ev != 0 || !s.phase.isEmpty() || s.label.isEmpty()) { s.label = ruleLabel(r); s.effect = iconEffect(r); s.icon = iconItem(r); }
+                if (ev > 0) {
+                    if ("out".equals(s.phase)) { finishTrans(s); s.phase = ""; }            // came back during the restore transition: stay on
+                    else if (!s.active && s.phase.isEmpty()) {
+                        if (trans) beginTrans(cfg, r, s, "in", now); else start(cfg, r, s, now);
+                    }
+                } else if (ev < 0) {
+                    if ("in".equals(s.phase)) { finishTrans(s); s.phase = ""; }             // ended before switching: nothing was applied
+                    else if (s.active && s.phase.isEmpty()) {
+                        if (trans && r.transOnEnd && enabled) beginTrans(cfg, r, s, "out", now); else end(cfg, r.id, s, r.notify, now);
+                    }
+                }
+                if (!s.phase.isEmpty() && now >= s.phaseUntil) {
+                    String ph = s.phase; s.phase = "";
+                    if (ph.equals("in")) start(cfg, r, s, now); else end(cfg, r.id, s, r.notify, now);
+                    finishTrans(s);
+                }
             }
             // rules deleted / other model profile: release what they still hold
             for (var it = RULES.entrySet().iterator(); it.hasNext(); ) {
                 var e = it.next();
                 if (seen.contains(e.getKey())) continue;
+                if (!e.getValue().phase.isEmpty()) { finishTrans(e.getValue()); e.getValue().phase = ""; }
                 if (e.getValue().active) end(cfg, e.getKey(), e.getValue(), false, now);
                 it.remove();
             }
@@ -165,7 +185,8 @@ public final class EffectTriggers {
         }
         markGroups(cfg, r.actions, true);
         Hud.invalidate();
-        if (r.notify) TriggerToasts.start(r.id, r.effect, s.label, effectName(r.effect) + " \u2192 " + changes(r), color(cfg, r));
+        Sounds.play(cfg, r.sound, false);
+        if (r.notify) TriggerToasts.start(r.id, s.effect, s.icon, s.label, condsText(r) + " \u2192 " + changes(r), color(cfg, r));
     }
 
     private static void end(WheelConfig cfg, String ruleId, RState s, boolean notify, long now) {
@@ -185,12 +206,129 @@ public final class EffectTriggers {
         }
         if (cfg != null) for (WheelConfig.EffectRule r : cfg.effRules) if (r.id.equals(ruleId)) markGroups(cfg, r.actions, false);
         Hud.invalidate();
+        if (!notify && cfg != null) for (WheelConfig.EffectRule r : cfg.effRules) if (r.id.equals(ruleId)) Sounds.play(cfg, r.sound, true);
         if (notify) {
             WheelConfig.EffectRule rr = null;
             if (cfg != null) for (WheelConfig.EffectRule r : cfg.effRules) if (r.id.equals(ruleId)) rr = r;
-            TriggerToasts.end(ruleId, s.effect, s.label, Component.translatable(restore ? "cpmwheel.toast.end" : "cpmwheel.toast.endkeep").getString(),
+            if (rr != null) Sounds.play(cfg, rr.sound, true);
+            TriggerToasts.end(ruleId, s.effect, s.icon, s.label, Component.translatable((restore ? "cpmwheel.toast.end" : "cpmwheel.toast.endkeep") + (s.effect.isEmpty() ? ".cond" : "")).getString(),
                     rr == null ? 0x3BFF9D : color(cfg, rr));
         }
+    }
+
+    // ---------- 1.6.0 conditions ----------
+    private static long lastHurt = Long.MIN_VALUE / 2; private static int prevHurtTime = 0; private static float prevHealth = -1;
+
+    /** the player right now, for TriggerLogic */
+    static TriggerLogic.Snapshot snapshot(LocalPlayer p, WheelConfig cfg, long now) {
+        TriggerLogic.Snapshot sn = new TriggerLogic.Snapshot();
+        for (MobEffectInstance e : p.getActiveEffects()) {
+            String id = ItemInfo.effectId(e);
+            if (!id.isEmpty()) sn.effects.merge(id, e.getAmplifier(), Math::max);
+        }
+        boolean dead = p.isDeadOrDying();
+        if (dead) sn.effects.clear();
+        float hp = p.getHealth();
+        if (p.hurtTime > prevHurtTime || (prevHealth >= 0 && hp < prevHealth - 0.01f)) lastHurt = now;
+        prevHurtTime = p.hurtTime; prevHealth = hp;
+        sn.health = hp;
+        sn.msSinceHurt = now - lastHurt;
+        var level = p.level();
+        sn.dayTime = level.getDayTime();
+        sn.fixedTime = level.dimensionType().hasFixedTime();
+        sn.raining = level.isRaining(); sn.thundering = level.isThundering();
+        sn.underwater = p.isEyeInFluid(net.minecraft.tags.FluidTags.WATER);
+        sn.dimension = level.dimension().location().toString();
+        sn.sneaking = p.isCrouching(); sn.sprinting = p.isSprinting();
+        net.minecraft.core.BlockPos pos = p.blockPosition();
+        sn.biome = v -> {
+            var h = level.getBiome(pos);
+            if (v.startsWith("#")) {
+                ResourceLocation t = ResourceLocation.tryParse(v.substring(1));
+                return t != null && h.is(net.minecraft.tags.TagKey.create(net.minecraft.core.registries.Registries.BIOME, t));
+            }
+            String id = h.unwrapKey().map(k -> k.location().toString()).orElse("");
+            String q = v.toLowerCase(java.util.Locale.ROOT);
+            return q.contains(":") ? id.equals(q) : id.endsWith(":" + q);
+        };
+        sn.hold = (v, hand) -> (hand != 2 && holds(cfg, p.getMainHandItem(), v)) || (hand != 1 && holds(cfg, p.getOffhandItem(), v));
+        if (dead) { sn.sneaking = false; sn.sprinting = false; }
+        return sn;
+    }
+    /** snapshot for screens (doesn't touch the "took damage" tracking) */
+    static TriggerLogic.Snapshot peek(LocalPlayer p, WheelConfig cfg) {
+        long lh = lastHurt; int ph = prevHurtTime; float pv = prevHealth;
+        TriggerLogic.Snapshot sn = snapshot(p, cfg, System.currentTimeMillis());
+        lastHurt = lh; prevHurtTime = ph; prevHealth = pv;
+        sn.msSinceHurt = System.currentTimeMillis() - lastHurt;
+        return sn;
+    }
+    /** "grp:<id>" = an item group, anything else = the same search as "Criar grupo" (backpack | mochila, @mod, -word) */
+    static boolean holds(WheelConfig cfg, net.minecraft.world.item.ItemStack st, String v) {
+        if (st.isEmpty()) return false;
+        var it = st.getItem(); ResourceLocation rl = BuiltInRegistries.ITEM.getKey(it);
+        if (v.startsWith("grp:")) { WheelConfig.ItemGroup g = cfg.group(v.substring(4)); return g != null && ItemGroups.matches(g, it, rl); }
+        return ItemGroups.Query.of(v).matches(it, rl, true);
+    }
+
+    static String iconEffect(WheelConfig.EffectRule r) {
+        for (TriggerLogic.Cond c : r.conds) if ("effect".equals(c.type) && !c.not && !c.value.isBlank()) return c.value;
+        return "";
+    }
+    /** item shown in the toast for non-effect conditions */
+    static String iconItem(WheelConfig.EffectRule r) {
+        for (TriggerLogic.Cond c : r.conds) {
+            String i = switch (c.type) {
+                case "health" -> "minecraft:golden_apple"; case "damage" -> "minecraft:iron_sword";
+                case "night" -> "minecraft:clock"; case "day" -> "minecraft:sunflower";
+                case "rain" -> "minecraft:water_bucket"; case "thunder" -> "minecraft:lightning_rod";
+                case "water" -> "minecraft:heart_of_the_sea"; case "biome" -> "minecraft:grass_block";
+                case "dimension" -> "minecraft:obsidian"; case "sneak" -> "minecraft:leather_boots";
+                case "sprint" -> "minecraft:feather"; case "hold" -> "minecraft:chest";
+                default -> "";
+            };
+            if (!i.isEmpty()) return i;
+        }
+        return "";
+    }
+    /** one condition in words: "Vida ≤ 3 ❤", "não Noite", "Bioma: deserto" */
+    public static String condText(WheelConfig cfg, TriggerLogic.Cond c) {
+        String t = switch (c.type) {
+            case "effect" -> effectName(c.value) + (c.num > 0 ? " " + EffectTriggersScreen.roman(c.num + 1) + "+" : "");
+            case "health" -> Component.translatable("cpmwheel.cond.t.health.v", String.format(java.util.Locale.ROOT, "%.1f", Math.max(1, c.num) / 2f)).getString();
+            case "damage" -> Component.translatable("cpmwheel.cond.t.damage.v", Math.max(1, c.num)).getString();
+            case "biome" -> Component.translatable("cpmwheel.cond.t.biome.v", c.value.isBlank() ? "?" : c.value).getString();
+            case "dimension" -> Component.translatable("cpmwheel.cond.t.dimension.v", c.value.isBlank() ? "?" : c.value).getString();
+            case "hold" -> Component.translatable("cpmwheel.cond.t.hold.v", holdName(cfg, c.value), Component.translatable("cpmwheel.cond.hand." + Math.min(2, c.num))).getString();
+            default -> Component.translatable("cpmwheel.cond.t." + c.type).getString();
+        };
+        return c.not ? Component.translatable("cpmwheel.cond.not.v", t).getString() : t;
+    }
+    static String holdName(WheelConfig cfg, String v) {
+        if (v == null || v.isBlank()) return "?";
+        if (v.startsWith("grp:") && cfg != null) { WheelConfig.ItemGroup g = cfg.group(v.substring(4)); return g == null ? v : g.label(); }
+        return v;
+    }
+    /** all conditions in words joined with "e" / "ou" */
+    public static String condsText(WheelConfig.EffectRule r) {
+        WheelConfig cfg = WheelConfig.get();
+        StringBuilder sb = new StringBuilder();
+        String j = " " + Component.translatable("or".equals(r.combine) ? "cpmwheel.cond.or" : "cpmwheel.cond.and").getString() + " ";
+        for (TriggerLogic.Cond c : r.conds) { if (sb.length() > 0) sb.append(j); sb.append(condText(cfg, c)); }
+        return sb.length() == 0 ? Component.translatable("cpmwheel.cond.none").getString() : sb.toString();
+    }
+
+    // ---------- 1.6.0 timed transition ----------
+    private static void beginTrans(WheelConfig cfg, WheelConfig.EffectRule r, RState s, String phase, long now) {
+        s.phase = phase; s.phaseUntil = now + Math.max(100, r.transMs);
+        s.transAnim = r.transAnim; s.transPrev = CpmBridge.playing(r.transAnim);
+        CpmBridge.play(r.transAnim, onValue(cfg, r.transAnim, -1));
+    }
+    private static void finishTrans(RState s) {
+        if (s.transAnim == null || s.transAnim.isBlank()) return;
+        if (HOLDS.containsKey(s.transAnim)) { s.transAnim = ""; return; } // the rule itself holds it: leave it alone
+        CpmBridge.play(s.transAnim, Math.max(0, s.transPrev));
+        s.transAnim = "";
     }
 
     /** "Humano desativado, chifres ativado" */

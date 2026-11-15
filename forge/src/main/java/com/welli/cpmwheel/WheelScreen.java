@@ -170,6 +170,7 @@ public class WheelScreen extends Screen {
         v = Math.max(s.minV(), Math.min(s.maxV(), v));
         CpmBridge.play(s.anim, v);
         Actions.sound(cfg, 1.5f);
+        Sounds.slot(cfg, s, -1); // 1.6.0 button sound
     }
 
     private void updatePreview(WheelConfig.Slot s) {
