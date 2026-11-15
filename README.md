@@ -268,7 +268,7 @@ Notas completas em cada [release](https://github.com/wellinton523/cpm-wheel/rele
 | [1.5.5](https://github.com/wellinton523/cpm-wheel/releases/tag/v1.5.5) | Itens "bloco plano", tela "Itens e mods" |
 | [1.5.0 – 1.5.4](https://github.com/wellinton523/cpm-wheel/releases) | Animações da mão em 1ª pessoa, regras de compatibilidade, ajuste por tipo de item, itens 2D, ajuste do braço por mão |
 | [1.4.0 – 1.4.8](https://github.com/wellinton523/cpm-wheel/releases) | Designs e cores, cores por página e HUD agrupado, exibição por botão, botões de grupo, teclas por botão, botões condicionais, brilho na mão |
-| [1.0.0 – 1.3.0](https://github.com/wellinton523/cpm-wheel/releases) | Roda radial, editor e HUD (só os jars, sem notas) |
+| [1.0.0 – 1.3.0](https://github.com/wellinton523/cpm-wheel/releases) | Roda radial e editor; prévia ao passar o mouse (1.2.0). Releases antigas têm só os jars, sem notas |
 
 ---
 
@@ -276,7 +276,7 @@ Notas completas em cada [release](https://github.com/wellinton523/cpm-wheel/rele
 
 - **Física Live2D:**
   - o CPM não tem fade suave entre animações, então transições e física trabalham por valores inteiros, 20 vezes por segundo (o CPM interpola um tick);
-  - com "Sinc. multiplayer" ligado e CPM no servidor, cada mudança de valor manda um pacote (até 20/s), e o eco do servidor pode sobrescrever a prévia local por um quadro;
+  - com "Sinc. multiplayer" ligado, cada mudança de valor manda um pacote de gesto do CPM (até 20/s);
   - a previsão local depende de detalhes internos do CPM; se não forem compatíveis, ela se desliga sozinha (aparece no log);
   - na condição "Animação", uma camada de valor no repouso (≈128) conta como tocando com mínimo 1, então aumente o mínimo;
   - o tempo de fade é por corrente, não por elo;
