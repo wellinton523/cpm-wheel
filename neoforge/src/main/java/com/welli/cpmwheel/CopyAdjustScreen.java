@@ -51,7 +51,8 @@ public class CopyAdjustScreen extends Screen {
     }
 
     private void copyTo(String t) {
-        for (String h : both ? new String[]{"main", "off"} : new String[]{off ? "off" : "main"})
+        boolean same = SameHands.on(cfg, t); // 1.5.9: "Igual nas duas mãos" targets always get both hands
+        for (String h : both || same ? new String[]{"main", "off"} : new String[]{off ? "off" : "main"})
             cfg.haItem.put((arm ? "arm/" : "") + t + "|" + h, values.clone());
         HandAnim.load(cfg);
         status = "\u2714 " + label(t);

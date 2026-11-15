@@ -30,6 +30,9 @@ public class ItemOverrideScreen extends Screen {
     /** remembered between openings */
     private static String mode = "item", filterMode = "set";
     private static boolean off = false, armMode = false;
+    /** 1.5.9: waiting for "keep main / keep off-hand values" before turning "Igual nas duas mãos" on */
+    private String askSame = null;
+    private boolean same() { return !target.isEmpty() && SameHands.on(cfg, prefix() + target); }
     private static String target = "", query = "";
     private final Screen parent;
     private final WheelConfig cfg;
@@ -132,9 +135,9 @@ public class ItemOverrideScreen extends Screen {
         if (mode.equals("group")) {
             WheelConfig.ItemGroup g = cfg.group(r);
             String l = g == null ? r : g.label() + (g.mod.isBlank() ? "" : " (" + g.mod + ")");
-            return (hasAny("grp:" + r) ? "\u2605 " : "") + l;
+            return (hasAny("grp:" + r) ? "\u2605 " : "") + (SameHands.on(cfg, "grp:" + r) ? "\u21C6 " : "") + l;
         }
-        return (hasAny(prefix() + r) ? "\u2605 " : "") + r;
+        return (hasAny(prefix() + r) ? "\u2605 " : "") + (SameHands.on(cfg, prefix() + r) ? "\u21C6 " : "") + r;
     }
 
     @Override
@@ -188,10 +191,29 @@ public class ItemOverrideScreen extends Screen {
         int ry = 26;
         addRenderableWidget(Button.builder(Component.translatable("cpmwheel.io.enabled", cfg.haItemOn ? "ON" : "OFF"), b -> {
             cfg.haItemOn = !cfg.haItemOn; HandAnim.load(cfg); rebuildWidgets(); }).bounds(x2, ry, 150, 20).build()); ry += 22;
-        addRenderableWidget(Button.builder(Component.translatable(off ? "cpmwheel.arm.off" : "cpmwheel.arm.main"), b -> { off = !off; rebuildWidgets(); }).bounds(x2, ry, 150, 20).build()); ry += 22;
+        // hand: Mão principal -> Mão secundária -> Igual nas duas mãos (per target)
+        boolean same = same();
+        if (same) off = false;
+        if (askSame != null && askSame.equals(prefix() + target)) {
+            addRenderableWidget(Button.builder(Component.translatable("cpmwheel.same.keep.main"), b -> { SameHands.enable(cfg, askSame, 0); askSame = null; off = false; rebuildWidgets(); })
+                    .tooltip(Tooltip.create(Component.translatable("cpmwheel.same.keep.help"))).bounds(x2, ry, 74, 20).build());
+            addRenderableWidget(Button.builder(Component.translatable("cpmwheel.same.keep.off"), b -> { SameHands.enable(cfg, askSame, 1); askSame = null; off = false; rebuildWidgets(); })
+                    .tooltip(Tooltip.create(Component.translatable("cpmwheel.same.keep.help"))).bounds(x2 + 76, ry, 74, 20).build());
+        } else {
+            askSame = null;
+            addRenderableWidget(Button.builder(Component.translatable(same ? "cpmwheel.same.on" : off ? "cpmwheel.arm.off" : "cpmwheel.arm.main"), b -> {
+                String base = prefix() + target;
+                if (same) { SameHands.disable(cfg, base); off = false; }           // split back into two independent copies
+                else if (!off) off = true;
+                else if (target.isEmpty()) off = false;
+                else if (SameHands.differ(cfg, base)) askSame = base;             // ask which hand's values to keep
+                else { SameHands.enable(cfg, base, 1); off = false; }
+                rebuildWidgets(); }).tooltip(Tooltip.create(Component.translatable("cpmwheel.same.help"))).bounds(x2, ry, 150, 20).build());
+        }
+        ry += 22;
         addRenderableWidget(Button.builder(Component.translatable(armMode ? "cpmwheel.io.arm" : "cpmwheel.io.item"), b -> { armMode = !armMode; rebuildWidgets(); }).bounds(x2, ry, 96, 20).build());
         Button phys = Button.builder(Component.translatable(hasPhys(prefix() + target) ? "cpmwheel.phys.btn.set" : "cpmwheel.phys.btn"), b -> minecraft.setScreen(new PhysicsScreen(this, cfg, prefix() + target,
-                Component.literal(rowLabel(target).replace("\u2605 ", "")), off)))
+                Component.literal(rowLabel(target).replace("\u2605 ", "").replace("\u21C6 ", "")), off)))
                 .tooltip(Tooltip.create(Component.translatable("cpmwheel.phys.btn.help"))).bounds(x2 + 98, ry, 52, 20).build();
         phys.active = !target.isEmpty();
         addRenderableWidget(phys); ry += 46;
@@ -214,12 +236,13 @@ public class ItemOverrideScreen extends Screen {
                         val = min + (int) Math.round(value * (max - min) / step) * step;
                         boolean fresh = !cfg.haItem.containsKey(key());
                         cfg.haItem.computeIfAbsent(key(), q -> start.clone())[idx] = val; HandAnim.load(cfg);
+                        SameHands.sync(cfg, prefix() + target);
                         if (fresh) srcLine = Component.translatable("cpmwheel.io.own", Component.translatable("cpmwheel.io.lvl." + mode));
                     }
                 });
                 ry += 22;
             }
-            Button reset = Button.builder(Component.translatable("cpmwheel.io.reset"), b -> { cfg.haItem.remove(key()); HandAnim.load(cfg); rebuildWidgets(); })
+            Button reset = Button.builder(Component.translatable("cpmwheel.io.reset"), b -> { cfg.haItem.remove(key()); SameHands.sync(cfg, prefix() + target); HandAnim.load(cfg); rebuildWidgets(); })
                     .tooltip(Tooltip.create(Component.translatable("cpmwheel.io.reset.help"))).bounds(x2, ry, 74, 20).build();
             reset.active = own != null;
             addRenderableWidget(reset);

@@ -526,6 +526,11 @@ public final class HandAnim {
         ps.translate(fp.x + f * (b[0] + a[0]) / 100f, fp.y + (b[1] + a[1]) / 100f, fp.z + (b[2] + a[2]) / 100f);
         if (two) ps.translate(-f * 0.45f, 0.05f, 0);                                   // between both fists
         float sc = Math.max(0.05f, (b[3] + a[3]) / 100f);
+        // 1.5.9: hanging physics in camera space at the grip point (same for both hands; 1.5.8 applied it in the mirrored item frame)
+        int phi = hand == InteractionHand.MAIN_HAND ? 0 : 1;
+        boolean hang = f(11) && HangPhysics.active(phi);
+        if (hang) HangPhysics.apply(ps, phi, sc);
+        else if (c == 10 && f(11)) ps.mulPose(Axis.ZP.rotationDegrees(lanZ * 0.15f)); // torch: small sideways lag (top lags behind the turn)
         // attack: quick chop of the item around the fist, plus our user rotations
         float sw = Mth.sin(Mth.sqrt(swing) * (float) Math.PI);
         if (sw != 0) ps.mulPose(Axis.XP.rotationDegrees(-45f * sw));
@@ -533,31 +538,24 @@ public final class HandAnim {
         if (b[4] + a[4] != 0) ps.mulPose(Axis.XP.rotationDegrees(b[4] + a[4]));
         if (b[6] + a[6] != 0) ps.mulPose(Axis.ZP.rotationDegrees(f * (b[6] + a[6])));
         boolean flat = flatCats[c];
-        int phi = hand == InteractionHand.MAIN_HAND ? 0 : 1;
-        boolean hang = f(11) && HangPhysics.active(phi);
         if ((c == 9 || c == 10) && !flat) {
             net.minecraft.world.level.block.state.BlockState st = ((BlockItem) it).getBlock().defaultBlockState();
             if (c == 9) {
                 if (st.hasProperty(net.minecraft.world.level.block.LanternBlock.HANGING)) st = st.setValue(net.minecraft.world.level.block.LanternBlock.HANGING, true);
-                if (hang) HangPhysics.apply(ps, phi, f, sc);
                 ps.scale(sc, sc, sc);
                 ps.translate(-0.5f, -1.0f, -0.5f);   // chain top at the fist, lantern hangs below
             } else {
-                if (hang) HangPhysics.apply(ps, phi, f, sc); else if (f(11)) ps.mulPose(Axis.ZP.rotationDegrees(lanZ * f * 0.15f));
                 ps.mulPose(Axis.XP.rotationDegrees(-10f));
                 ps.scale(sc, sc, sc);
                 ps.translate(-0.5f, -0.25f, -0.5f);  // grip a quarter up the stick
             }
             Minecraft.getInstance().getBlockRenderer().renderSingleBlock(st, ps, buf, light, net.minecraft.client.renderer.texture.OverlayTexture.NO_OVERLAY);
         } else if (c == 7 && !flat) {                         // blocks: upright, small, vanilla first-person block pose
-            if (hang) HangPhysics.apply(ps, phi, f, sc);
             ps.scale(sc, sc, sc);
             Minecraft.getInstance().getEntityRenderDispatcher().getItemInHandRenderer().renderItem(p, stack,
                     right ? net.minecraft.world.item.ItemDisplayContext.FIRST_PERSON_RIGHT_HAND : net.minecraft.world.item.ItemDisplayContext.FIRST_PERSON_LEFT_HAND,
                     !right, ps, buf, light);
         } else {                                     // everything else: held like third person, grip in the fist
-            if (hang) HangPhysics.apply(ps, phi, f, sc);
-            else if (c == 10 && f(11)) ps.mulPose(Axis.ZP.rotationDegrees(lanZ * f * 0.15f));
             ps.mulPose(new org.joml.Quaternionf(GRIP));
             ps.scale(sc, sc, sc);
             Minecraft.getInstance().getEntityRenderDispatcher().getItemInHandRenderer().renderItem(p, stack,

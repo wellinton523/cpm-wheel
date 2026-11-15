@@ -250,7 +250,7 @@ public class WheelConfig {
     public String centerMode = "player";
     /** center size in percent (50-200) */
     public int centerSize = 100;
-    public int configVersion = 17;
+    public int configVersion = 18;
     private static final String LEGACY_DESIGN = "signalis";
     /** HUD grouped by wheel/folder with nested bars; false = flat list */
     public boolean hudGrouped = true;
@@ -290,6 +290,8 @@ public class WheelConfig {
     public boolean haItemOn = true;
     /** 1.5.8 "Física de pendurado" per item/group/mod/type and hand: {on, pivot, intensity, stiffness, damping x10, weight, max angle, react} */
     public java.util.Map<String, int[]> haPhys = new java.util.HashMap<>();
+    /** 1.5.9 "Igual nas duas mãos": targets ("ns:id", "grp:<id>", "mod:<ns>", "cat:<type>") whose item/arm/physics values are edited once for both hands */
+    public java.util.Set<String> haSame = new java.util.HashSet<>();
     /** 1.5.4: categories drawn 2D (flat item) instead of 3D (lantern, torch, block each separate); arm adjust per hand */
     public List<String> haFlat = new ArrayList<>();
     public java.util.Map<String, int[]> haArm = new java.util.HashMap<>();
@@ -366,6 +368,7 @@ public class WheelConfig {
                     if (c.configVersion < 16) { c.configVersion = 16; c.haWorldArm = "on"; c.haWorldDepth = 40; c.effOn = true; } // 1.5.7: world-pass arm (Better Combat method) on, item groups, effect triggers
                     if (c.configVersion < 17) { c.configVersion = 17; c.toastOn = true; c.toastSecs = 4; c.toastOpacity = 85; c.toastMini = true; c.hudSnap = true;
                         if (c.effRules != null) for (EffectRule r : c.effRules) if (r != null) r.lock = true; } // 1.5.8: query groups, physics, movable HUD (list position from the old corner), toasts, trigger lock
+                    if (c.configVersion < 18) c.configVersion = 18; // 1.5.9: physics with gravity (old arrays upgraded in fixup), "Igual nas duas mãos"
                     c.fixup();
                     if (c.centerMode == null || c.centerMode.isBlank()) c.centerMode = "player";
                     if (c.hudCorner == null || c.hudCorner.isBlank()) c.hudCorner = "top_left";
@@ -416,7 +419,10 @@ public class WheelConfig {
         toastSecs = Math.max(1, Math.min(15, toastSecs <= 0 ? 4 : toastSecs));
         toastOpacity = Math.max(0, Math.min(100, toastOpacity));
         if (haPhys == null) haPhys = new java.util.HashMap<>();
-        haPhys.entrySet().removeIf(e -> e.getKey() == null || !(e.getKey().endsWith("|main") || e.getKey().endsWith("|off")) || e.getValue() == null || e.getValue().length != 8);
+        for (var e : haPhys.entrySet()) e.setValue(HangPhysics.upgrade(e.getValue())); // 1.5.9: 8 -> 11 values (gravity, raise limit, invert)
+        haPhys.entrySet().removeIf(e -> e.getKey() == null || !(e.getKey().endsWith("|main") || e.getKey().endsWith("|off")) || e.getValue() == null || e.getValue().length != PendulumMath.LEN);
+        if (haSame == null) haSame = new java.util.HashSet<>();
+        haSame.removeIf(java.util.Objects::isNull);
         haFlat.removeIf(k -> k == null || java.util.Arrays.asList(HandAnim.CATS).indexOf(k) < 0);
         if (haGroups == null) haGroups = new ArrayList<>();
         haGroups.removeIf(java.util.Objects::isNull);
