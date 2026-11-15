@@ -170,6 +170,44 @@ public class WheelConfig {
         public int value = -1;
     }
 
+    /** 1.5.7 item group: kind "pattern" (wildcard * ? or re:regex on the id), "class" (item class incl. subclasses), "tag" (item tag), "list" (only the listed ids) */
+    public static class ItemGroup {
+        public String id = "";
+        public String name = "";
+        /** mod (namespace) the group belongs to; "" = any mod */
+        public String mod = "";
+        public String kind = "pattern";
+        public String value = "";
+        /** extra items always in the group (and the only members for kind "list") */
+        public List<String> items = new ArrayList<>();
+        public String label() { return name == null || name.isBlank() ? (value == null || value.isBlank() ? id : value) : name; }
+    }
+
+    /** 1.5.7 effect trigger: while the effect is active, run the actions; when it ends, restore (or keep) */
+    public static class EffectRule {
+        public String id = "";
+        public String name = "";
+        public boolean on = true;
+        public String effect = "minecraft:poison";
+        /** minimum amplifier (0 = level I = any) */
+        public int minAmp = 0;
+        public List<EffectAction> actions = new ArrayList<>();
+        /** "restore" = back to the previous state, "none" = do nothing */
+        public String onEnd = "restore";
+        /** debounce in ms: condition must hold this long before starting / ending */
+        public int delayStart = 0, delayEnd = 1000;
+        public boolean notify = true;
+    }
+
+    /** target "anim:<cpm animation>" or "group:<group button name>"; op "on" (ATIVAR), "off" (DESATIVAR), "toggle" (ALTERNAR); value for ATIVAR on value animations (-1 = button value / max) */
+    public static class EffectAction {
+        public String target = "";
+        public String op = "off";
+        public int value = -1;
+        public EffectAction() {}
+        public EffectAction(String t, String o) { target = t; op = o; }
+    }
+
     public static class Frame {
         public String name = "";
         /** exact CPM value, -1 = auto (evenly spread min..max) */
@@ -196,7 +234,7 @@ public class WheelConfig {
     public String centerMode = "player";
     /** center size in percent (50-200) */
     public int centerSize = 100;
-    public int configVersion = 15;
+    public int configVersion = 16;
     private static final String LEGACY_DESIGN = "signalis";
     /** HUD grouped by wheel/folder with nested bars; false = flat list */
     public boolean hudGrouped = true;
@@ -237,6 +275,14 @@ public class WheelConfig {
     /** 1.5.4: categories drawn 2D (flat item) instead of 3D (lantern, torch, block each separate); arm adjust per hand */
     public List<String> haFlat = new ArrayList<>();
     public java.util.Map<String, int[]> haArm = new java.util.HashMap<>();
+    /** 1.5.7: draw the first-person arm in the world entity pass like Better Combat ("on", "auto" = only with a shader pack, "off"), depth % toward the camera */
+    public String haWorldArm = "on";
+    public int haWorldDepth = 40;
+    /** 1.5.7: item groups inside a mod (overrides stored in haItem as "grp:<id>|main/off" and "arm/grp:<id>|..."); priority item > group > mod > category */
+    public List<ItemGroup> haGroups = new ArrayList<>();
+    /** 1.5.7: effect triggers ("Gatilhos de efeito") */
+    public boolean effOn = true;
+    public List<EffectRule> effRules = new ArrayList<>();
     public int haIntensity = 100, haIdle = 100, haBob = 100, haInertia = 100, haPose = 100, haSwing = 100;
     public boolean frameSegments = true;
     public boolean hudEnabled = true;
@@ -292,6 +338,7 @@ public class WheelConfig {
                     if (c.configVersion < 11) c.configVersion = 11; // 1.5.0: hand animations (new fields, defaults on, set in fixup)
                     if (c.configVersion < 10) c.configVersion = 10; // 1.4.7: handGlow (default auto, set in fixup) // 1.4.6: group members -> actions (fixup), keybinds, conditional slots // 1.4.5: group slots (new fields, default none)
                     if (c.configVersion < 6) c.configVersion = 6; // 1.4.2: design id rename + per-slot displayMode (defaults to "") handled in fixup()
+                    if (c.configVersion < 16) { c.configVersion = 16; c.haWorldArm = "on"; c.haWorldDepth = 40; c.effOn = true; } // 1.5.7: world-pass arm (Better Combat method) on, item groups, effect triggers
                     c.fixup();
                     if (c.centerMode == null || c.centerMode.isBlank()) c.centerMode = "player";
                     if (c.hudCorner == null || c.hudCorner.isBlank()) c.hudCorner = "top_left";
@@ -326,6 +373,8 @@ public class WheelConfig {
         if (Style.idx(Style.THEMES, theme) < 0) theme = "auto";
         if (!java.util.Arrays.asList(FpState.MODES).contains(fpAnimations)) fpAnimations = "layers";
         if (!java.util.Arrays.asList(HandGlow.MODES).contains(handGlow)) handGlow = "auto";
+        if (!java.util.Arrays.asList(WorldArm.MODES).contains(haWorldArm)) haWorldArm = "on";
+        haWorldDepth = haWorldDepth <= 0 ? 40 : Math.max(20, Math.min(100, haWorldDepth));
         if (handAnimOff == null) handAnimOff = new ArrayList<>();
         if (haIgnore == null) haIgnore = new ArrayList<>();
         if (haAdj == null) haAdj = new java.util.HashMap<>();
@@ -333,6 +382,30 @@ public class WheelConfig {
         if (haItem == null) haItem = new java.util.HashMap<>();
         haItem.entrySet().removeIf(e -> e.getKey() == null || !(e.getKey().endsWith("|main") || e.getKey().endsWith("|off")) || e.getValue() == null || e.getValue().length != 7);
         haFlat.removeIf(k -> k == null || java.util.Arrays.asList(HandAnim.CATS).indexOf(k) < 0);
+        if (haGroups == null) haGroups = new ArrayList<>();
+        haGroups.removeIf(java.util.Objects::isNull);
+        java.util.Set<String> gids = new java.util.HashSet<>();
+        for (ItemGroup g : haGroups) {
+            if (g.id == null || g.id.isBlank() || !gids.add(g.id)) { g.id = newId("g"); gids.add(g.id); }
+            if (g.name == null) g.name = ""; if (g.mod == null) g.mod = ""; if (g.value == null) g.value = "";
+            if (!java.util.Arrays.asList("pattern", "class", "tag", "list").contains(g.kind)) g.kind = "pattern";
+            if (g.items == null) g.items = new ArrayList<>();
+            g.items.removeIf(i -> i == null || i.isBlank());
+        }
+        if (effRules == null) effRules = new ArrayList<>();
+        effRules.removeIf(java.util.Objects::isNull);
+        java.util.Set<String> rids = new java.util.HashSet<>();
+        for (EffectRule r : effRules) {
+            if (r.id == null || r.id.isBlank() || !rids.add(r.id)) { r.id = newId("r"); rids.add(r.id); }
+            if (r.name == null) r.name = "";
+            if (r.effect == null) r.effect = "";
+            r.minAmp = clamp(r.minAmp, 0, 255);
+            if (!"none".equals(r.onEnd)) r.onEnd = "restore";
+            r.delayStart = clamp(r.delayStart, 0, 10000); r.delayEnd = clamp(r.delayEnd, 0, 10000);
+            if (r.actions == null) r.actions = new ArrayList<>();
+            r.actions.removeIf(a -> a == null || a.target == null || a.target.isBlank());
+            for (EffectAction a : r.actions) if (!java.util.Arrays.asList("on", "off", "toggle").contains(a.op)) a.op = "off";
+        }
         if (haArm == null) haArm = new java.util.HashMap<>();
         haArm.entrySet().removeIf(e -> !("main".equals(e.getKey()) || "off".equals(e.getKey())) || e.getValue() == null || e.getValue().length != 7);
         haAdj.entrySet().removeIf(e -> e.getKey() == null || e.getValue() == null || e.getValue().length != 7 || java.util.Arrays.asList(HandAnim.CATS).indexOf(e.getKey()) < 0);
@@ -361,6 +434,15 @@ public class WheelConfig {
             if (sl.displayMode == null || !Arrays.asList(Slot.DISPLAY_MODES).contains(sl.displayMode)) sl.displayMode = "";
         }
     }
+    public static String newId(String prefix) { return prefix + Long.toString(System.nanoTime() & 0xFFFFFFFFFFL, 36) + Integer.toString((int) (Math.random() * 1296), 36); }
+    public ItemGroup group(String id) { if (haGroups != null) for (ItemGroup g : haGroups) if (g.id.equals(id)) return g; return null; }
+    /** group button by its shown name (or animation field) */
+    public Slot groupSlot(String name) {
+        for (Slot s : allSlots()) if (s.isGroup() && (s.display().equals(name))) return s;
+        for (Slot s : allSlots()) if (s.isGroup() && name.equals(s.anim)) return s;
+        return null;
+    }
+    static int clampI(int v, int a, int b) { return clamp(v, a, b); }
     private static int clamp(int v, int a, int b) { return Math.max(a, Math.min(b, v)); }
 
     public String profileKey() { return currentKey == null ? "default" : currentKey; }

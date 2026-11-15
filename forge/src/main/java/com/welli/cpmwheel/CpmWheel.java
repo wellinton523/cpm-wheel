@@ -38,8 +38,12 @@ public class CpmWheel {
         MinecraftForge.EVENT_BUS.addListener(this::tick);
         HandAnim.detectConflicts(id -> ModList.get().isLoaded(id));
         MinecraftForge.EVENT_BUS.addListener((TickEvent.RenderTickEvent e) -> { if (e.phase == TickEvent.Phase.START) HandAnim.frameStart(); });
+        MinecraftForge.EVENT_BUS.addListener((net.minecraftforge.client.event.RenderLevelStageEvent e) -> {
+            if (e.getStage() == net.minecraftforge.client.event.RenderLevelStageEvent.Stage.AFTER_ENTITIES)
+                WorldArm.afterEntities(e.getPoseStack(), e.getCamera(), e.getPartialTick()); });
         MinecraftForge.EVENT_BUS.addListener((net.minecraftforge.client.event.RenderHandEvent e) ->
-                { if (HandAnim.apply(e.getPoseStack(), e.getHand(), e.getItemStack(), e.getPartialTick(), e.getSwingProgress(), e.getEquipProgress(), e.getMultiBufferSource(), e.getPackedLight())) e.setCanceled(true); });
+                { if (WorldArm.suppress(e.getHand())) { e.setCanceled(true); return; }
+                  if (HandAnim.apply(e.getPoseStack(), e.getHand(), e.getItemStack(), e.getPartialTick(), e.getSwingProgress(), e.getEquipProgress(), e.getMultiBufferSource(), e.getPackedLight())) e.setCanceled(true); });
         MinecraftForge.EVENT_BUS.addListener((net.minecraftforge.client.event.RenderGuiEvent.Post e) -> Hud.render(e.getGuiGraphics()));
     }
 

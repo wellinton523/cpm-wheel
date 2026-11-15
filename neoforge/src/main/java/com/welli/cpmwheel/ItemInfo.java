@@ -18,4 +18,9 @@ final class ItemInfo {
             if (e.attribute().equals(Attributes.ATTACK_DAMAGE) && e.modifier().operation() == AttributeModifier.Operation.ADD_VALUE) d += e.modifier().amount();
         return d;
     }
+
+    /** 1.5.7 effect triggers: registry id of an active effect ("minecraft:poison") */
+    static String effectId(net.minecraft.world.effect.MobEffectInstance e) {
+        try { return e.getEffect().unwrapKey().map(k -> k.location().toString()).orElse(""); } catch (Throwable t) { return ""; }
+    }
 }

@@ -37,8 +37,12 @@ public class CpmWheel {
         NeoForge.EVENT_BUS.addListener(this::tick);
         HandAnim.detectConflicts(id -> ModList.get().isLoaded(id));
         NeoForge.EVENT_BUS.addListener((net.neoforged.neoforge.client.event.RenderFrameEvent.Pre e) -> HandAnim.frameStart());
+        NeoForge.EVENT_BUS.addListener((net.neoforged.neoforge.client.event.RenderLevelStageEvent e) -> {
+            if (e.getStage() == net.neoforged.neoforge.client.event.RenderLevelStageEvent.Stage.AFTER_ENTITIES)
+                WorldArm.afterEntities(e.getPoseStack(), e.getCamera(), e.getPartialTick().getGameTimeDeltaPartialTick(true)); });
         NeoForge.EVENT_BUS.addListener((net.neoforged.neoforge.client.event.RenderHandEvent e) ->
-                { if (HandAnim.apply(e.getPoseStack(), e.getHand(), e.getItemStack(), e.getPartialTick(), e.getSwingProgress(), e.getEquipProgress(), e.getMultiBufferSource(), e.getPackedLight())) e.setCanceled(true); });
+                { if (WorldArm.suppress(e.getHand())) { e.setCanceled(true); return; }
+                  if (HandAnim.apply(e.getPoseStack(), e.getHand(), e.getItemStack(), e.getPartialTick(), e.getSwingProgress(), e.getEquipProgress(), e.getMultiBufferSource(), e.getPackedLight())) e.setCanceled(true); });
         NeoForge.EVENT_BUS.addListener((net.neoforged.neoforge.client.event.RenderGuiEvent.Post e) -> Hud.render(e.getGuiGraphics()));
     }
 

@@ -1,0 +1,74 @@
+package com.welli.cpmwheel;
+
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Locale;
+import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.components.Button;
+import net.minecraft.client.gui.components.EditBox;
+import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.network.chat.Component;
+
+/** 1.5.7: pick what an effect rule switches: a group button, a wheel button (emote / toggle) or any CPM animation. */
+public class TargetPickerScreen extends Screen {
+    private final Screen parent;
+    private final WheelConfig cfg;
+    private final WheelConfig.EffectRule rule;
+    private final WheelConfig.EffectAction editing;
+    /** target -> shown text */
+    private final LinkedHashMap<String, String> all = new LinkedHashMap<>();
+    private final List<String> shown = new ArrayList<>();
+    private String query = "";
+    private int page = 0;
+
+    public TargetPickerScreen(Screen parent, WheelConfig cfg, WheelConfig.EffectRule rule, WheelConfig.EffectAction editing) {
+        super(Component.translatable("cpmwheel.eff.tpick")); this.parent = parent; this.cfg = cfg; this.rule = rule; this.editing = editing;
+        for (WheelConfig.Slot s : cfg.allSlots()) if (s.isGroup()) all.putIfAbsent("group:" + s.display(), Component.translatable("cpmwheel.eff.t.group", s.display()).getString());
+        for (WheelConfig.Slot s : cfg.allSlots())
+            if (!s.isFolder() && !s.isGroup() && !s.isCond() && !s.empty() && !WheelConfig.RESET.equals(s.anim))
+                all.putIfAbsent("anim:" + s.anim, Component.translatable("cpmwheel.eff.t.button", s.display(), s.anim).getString());
+        for (String a : CpmBridge.listAnimations().keySet()) all.putIfAbsent("anim:" + a, Component.translatable("cpmwheel.eff.t.anim", a).getString());
+    }
+
+    @Override
+    protected void init() {
+        shown.clear();
+        String q = query.toLowerCase(Locale.ROOT).trim();
+        for (var e : all.entrySet()) if (q.isEmpty() || e.getValue().toLowerCase(Locale.ROOT).contains(q)) shown.add(e.getKey());
+        int x = 8, y = 26, w = Math.min(320, width - 16);
+        EditBox s = new EditBox(font, x, y, 200, 18, Component.literal(""));
+        s.setHint(Component.translatable("cpmwheel.eff.tpick.search"));
+        s.setValue(query);
+        s.setResponder(v -> { if (!v.equals(query)) { query = v; page = 0; rebuildWidgets(); setFocused(s); s.setFocused(true); } });
+        addRenderableWidget(s);
+        y += 24;
+        int per = Math.max(3, (height - 32 - y) / 20);
+        int pages = Math.max(1, (shown.size() + per - 1) / per);
+        page = Math.floorMod(page, pages);
+        for (int i = page * per; i < Math.min(shown.size(), (page + 1) * per); i++) {
+            String t = shown.get(i);
+            addRenderableWidget(Button.builder(Component.literal(all.get(t)), b -> {
+                if (editing != null) editing.target = t;
+                else rule.actions.add(new WheelConfig.EffectAction(t, "off"));
+                minecraft.setScreen(parent);
+            }).bounds(x, y, w, 18).build());
+            y += 20;
+        }
+        if (pages > 1) {
+            addRenderableWidget(Button.builder(Component.literal("<"), b -> { page--; rebuildWidgets(); }).bounds(x, height - 26, 20, 20).build());
+            addRenderableWidget(Button.builder(Component.literal((page + 1) + "/" + pages), b -> {}).bounds(x + 22, height - 26, 60, 20).build());
+            addRenderableWidget(Button.builder(Component.literal(">"), b -> { page++; rebuildWidgets(); }).bounds(x + 84, height - 26, 20, 20).build());
+        }
+        addRenderableWidget(Button.builder(Component.translatable("gui.back"), b -> onClose()).bounds(width - 108, height - 26, 100, 20).build());
+    }
+
+    @Override public void render(GuiGraphics g, int mx, int my, float pt) {
+        g.fill(0, 0, width, height, 0xC0050A12); g.drawString(font, title, 8, 10, Style.accent(cfg));
+        if (all.isEmpty()) g.drawString(font, Component.translatable("cpmwheel.eff.tpick.none"), 8, 54, 0x7FA8B8);
+        super.render(g, mx, my, pt);
+    }
+    @Override public void renderBackground(GuiGraphics g, int mx, int my, float pt) {}
+    @Override public void onClose() { minecraft.setScreen(parent); }
+    @Override public boolean isPauseScreen() { return false; }
+}

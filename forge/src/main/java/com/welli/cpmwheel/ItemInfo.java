@@ -16,4 +16,9 @@ final class ItemInfo {
             if (m.getOperation() == AttributeModifier.Operation.ADDITION) d += m.getAmount();
         return d;
     }
+
+    /** 1.5.7 effect triggers: registry id of an active effect ("minecraft:poison") */
+    static String effectId(net.minecraft.world.effect.MobEffectInstance e) {
+        try { var k = net.minecraft.core.registries.BuiltInRegistries.MOB_EFFECT.getKey(e.getEffect()); return k == null ? "" : k.toString(); } catch (Throwable t) { return ""; }
+    }
 }

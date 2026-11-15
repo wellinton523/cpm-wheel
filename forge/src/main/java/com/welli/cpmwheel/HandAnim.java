@@ -152,7 +152,9 @@ public final class HandAnim {
     }
 
     // ---- per-frame state (render thread = client thread) ----
-    private static long lastNs = 0, frame = 0;
+    private static long lastNs = 0;
+    /** render frame counter (also used by WorldArm to skip hands it already drew) */
+    static long frame = 0;
     private static float sYaw = Float.NaN, sPitch, sneakW, swimW, climbW;
     private static float swimPhase, climbPhase;
     private static float pYaw, pPitch, lanZ, lanX, lanVZ, lanVX; // lantern pendulum
@@ -307,6 +309,24 @@ public final class HandAnim {
     }
     private static boolean loggedErr, logArm;
 
+    /** 1.5.7 world-pass arm: can this hand be drawn completely by us (arm + item), outside the vanilla hand pass? */
+    static boolean worldOk(LocalPlayer p, InteractionHand hand, ItemStack stack) {
+        if (allBlocked || failed) return false;
+        if (stack.isEmpty()) return hand == InteractionHand.MAIN_HAND;   // empty main hand: vanilla arm chain (always ours)
+        if (!master || Float.isNaN(sYaw) || !f(10) || vanillaItem || p.isInvisible()) return false;
+        Item it = stack.getItem();
+        if (it instanceof MapItem) return false;
+        if (p.isUsingItem() && p.getUsedItemHand() == hand) return false;
+        if (it instanceof CrossbowItem && CrossbowItem.isCharged(stack)) return false;
+        return true;
+    }
+
+    /** 1.5.7 world-pass arm: vanilla renderPlayerArm (empty main hand) with our arm renderer */
+    static void emptyArm(PoseStack ps, LocalPlayer p, MultiBufferSource buf, int light, boolean right, float swing, float equip) {
+        armChain(ps, right ? 1 : -1, swing, equip);
+        drawArm(ps, p, buf, light, right);
+    }
+
     // ---- arm visible with items: we draw arm + item ourselves, item seated in the arm's fist ----
     public static final String[] CATS = {"sword", "axe", "tool", "bow", "crossbow", "trident", "shield", "block", "food", "lantern", "torch", "other", "flatblock"};
     /** built-in per-category base {x, y, z (1/100 block), scale %, rotX, rotY, rotZ (deg)}; user offsets from config are added */
@@ -369,9 +389,18 @@ public final class HandAnim {
     static volatile java.util.Map<String, int[][]> MOD_ADJ = java.util.Map.of();
     static volatile java.util.Map<Item, int[][]> ITEM_ARM = java.util.Map.of();
     static volatile java.util.Map<String, int[][]> MOD_ARM = java.util.Map.of();
+    static volatile java.util.Map<String, int[][]> GROUP_ADJ = java.util.Map.of();
+    static volatile java.util.Map<String, int[][]> GROUP_ARM = java.util.Map.of();
+    /** 1.5.7 priority: item > group (first matching group with a value for this hand) > mod; category / global come on top elsewhere */
     static int[] pick(java.util.Map<Item, int[][]> items, java.util.Map<String, int[][]> mods, Item it, int hi) {
+        return pick(items, items == ITEM_ARM ? GROUP_ARM : GROUP_ADJ, mods, it, hi);
+    }
+    static int[] pick(java.util.Map<Item, int[][]> items, java.util.Map<String, int[][]> groups, java.util.Map<String, int[][]> mods, Item it, int hi) {
         int[][] io = items.get(it);
         int[] o = io == null ? null : io[hi];
+        if (o == null && !groups.isEmpty()) {
+            for (String g : ItemGroups.groupsOf(it)) { int[][] go = groups.get(g); if (go != null && go[hi] != null) { o = go[hi]; break; } }
+        }
         if (o == null && !mods.isEmpty()) { int[][] mo = mods.get(BuiltInRegistries.ITEM.getKey(it).getNamespace()); o = mo == null ? null : mo[hi]; }
         return o;
     }
@@ -379,6 +408,8 @@ public final class HandAnim {
         java.util.Map<Item, int[][]> m = new java.util.IdentityHashMap<>();
         java.util.Map<String, int[][]> mods = new java.util.HashMap<>(), amods = new java.util.HashMap<>();
         java.util.Map<Item, int[][]> am = new java.util.IdentityHashMap<>();
+        java.util.Map<String, int[][]> gadj = new java.util.HashMap<>(), garm = new java.util.HashMap<>();
+        ItemGroups.load(c);
         for (var e : c.haItem.entrySet()) {
             String k = e.getKey(); int bar = k.lastIndexOf('|');
             if (bar < 0 || e.getValue() == null || e.getValue().length != 7) continue;
@@ -386,9 +417,14 @@ public final class HandAnim {
                 String ak = k.substring(4); int ab = ak.lastIndexOf('|');
                 int hi = "off".equals(ak.substring(ab + 1)) ? 1 : 0;
                 if (ak.startsWith("mod:")) { amods.computeIfAbsent(ak.substring(4, ab), x -> new int[2][])[hi] = e.getValue().clone(); continue; }
+                if (ak.startsWith("grp:")) { garm.computeIfAbsent(ak.substring(4, ab), x -> new int[2][])[hi] = e.getValue().clone(); continue; }
                 net.minecraft.resources.ResourceLocation arl = net.minecraft.resources.ResourceLocation.tryParse(ak.substring(0, ab));
                 if (arl != null && BuiltInRegistries.ITEM.containsKey(arl))
                     am.computeIfAbsent(BuiltInRegistries.ITEM.get(arl), x -> new int[2][])[hi] = e.getValue().clone();
+                continue;
+            }
+            if (k.startsWith("grp:")) {
+                gadj.computeIfAbsent(k.substring(4, bar), x -> new int[2][])["off".equals(k.substring(bar + 1)) ? 1 : 0] = e.getValue().clone();
                 continue;
             }
             if (k.startsWith("mod:")) {
@@ -400,7 +436,7 @@ public final class HandAnim {
             Item it = BuiltInRegistries.ITEM.get(rl);
             m.computeIfAbsent(it, x -> new int[2][])["off".equals(k.substring(bar + 1)) ? 1 : 0] = e.getValue().clone();
         }
-        ITEM_ADJ = m; MOD_ADJ = mods; ITEM_ARM = am; MOD_ARM = amods; itemOverrides = c.haItemOn;
+        ITEM_ADJ = m; MOD_ADJ = mods; ITEM_ARM = am; MOD_ARM = amods; GROUP_ADJ = gadj; GROUP_ARM = garm; itemOverrides = c.haItemOn;
     }
 
     static int cat(ItemStack s) {
@@ -481,12 +517,7 @@ public final class HandAnim {
         int[] b = BASE[c], a = adj[c].clone();
         if (itemOverrides) {
             int hi = hand == InteractionHand.MAIN_HAND ? 0 : 1;
-            int[][] io = ITEM_ADJ.get(it);
-            int[] o = io == null ? null : io[hi];                    // priority: item > mod > category
-            if (o == null && !MOD_ADJ.isEmpty()) {
-                int[][] mo = MOD_ADJ.get(BuiltInRegistries.ITEM.getKey(it).getNamespace());
-                o = mo == null ? null : mo[hi];
-            }
+            int[] o = pick(ITEM_ADJ, GROUP_ADJ, MOD_ADJ, it, hi);     // priority: item > group > mod, added on the category
             if (o != null) for (int q = 0; q < 7; q++) a[q] += o[q];
         }
         ps.pushPose();

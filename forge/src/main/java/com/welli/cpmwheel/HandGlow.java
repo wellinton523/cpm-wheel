@@ -27,7 +27,7 @@ public final class HandGlow {
         if (GLOW.size() > 256) GLOW.clear();
         if (GLOW.add(rt)) logOnce("swap", "hand glow: replaced CPM glow render type with " + rt + " (mode=" + mode + ", irisShaders=" + shadersOn() + ")");
     }
-    public static boolean isGlow(Object rt) { return rt != null && inHand && GLOW.contains(rt); }
+    public static boolean isGlow(Object rt) { return rt != null && inHand && !WorldArm.inWorldPass && GLOW.contains(rt); }
 
     /** one-time debug lines */
     public static void logOnce(String key, String msg) { if (LOGGED.add(key)) LOG.info("[cpmwheel] " + msg); }
@@ -64,7 +64,7 @@ public final class HandGlow {
     }
 
     public static boolean active() {
-        if (!inHand) return false;
+        if (!inHand || WorldArm.inWorldPass) return false; // 1.5.7: in the world pass CPM's own emissive type works
         String m = mode;
         return "emissive".equals(m) || ("auto".equals(m) && shadersOn());
     }

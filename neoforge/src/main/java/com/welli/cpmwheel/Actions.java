@@ -36,6 +36,7 @@ public final class Actions {
         FpState.mode = c.fpAnimations == null ? "layers" : c.fpAnimations;
         HandGlow.mode = c.handGlow == null ? "auto" : c.handGlow;
         HandAnim.load(c);
+        WorldArm.load(c);
         List<WheelConfig.Slot> b = new ArrayList<>(), a = new ArrayList<>();
         for (WheelConfig.Slot s : c.allSlots()) {
             if (s.key >= 0 && !s.isFolder() && !s.empty()) b.add(s);
@@ -119,6 +120,7 @@ public final class Actions {
         if (mc.player == null) { java.util.Arrays.fill(DOWN, false); return; }
         long nowMs = System.currentTimeMillis();
         if (cached == null || nowMs - cachedAt > 2000) refresh();
+        EffectTriggers.tick(mc, cached); // 1.5.7 "Gatilhos de efeito"
         // conditional auto mode: re-evaluate only when the held items change
         if (!autoCond.isEmpty()) {
             var mainS = mc.player.getMainHandItem(); var offS = mc.player.getOffhandItem();
