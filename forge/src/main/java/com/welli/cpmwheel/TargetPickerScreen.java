@@ -34,7 +34,7 @@ public class TargetPickerScreen extends Screen {
         super(Component.translatable("cpmwheel.eff.tpick")); this.parent = parent; this.cfg = cfg; this.rule = rule; this.editing = editing;
         for (WheelConfig.Slot s : cfg.allSlots()) if (s.isGroup()) all.putIfAbsent("group:" + s.display(), Component.translatable("cpmwheel.eff.t.group", s.display()).getString());
         for (WheelConfig.Slot s : cfg.allSlots())
-            if (!s.isFolder() && !s.isGroup() && !s.isCond() && !s.empty() && !WheelConfig.RESET.equals(s.anim))
+            if (!s.isFolder() && !s.isGroup() && !s.isCond() && !s.isEc() && !s.empty() && !WheelConfig.RESET.equals(s.anim))
                 all.putIfAbsent("anim:" + s.anim, Component.translatable("cpmwheel.eff.t.button", s.display(), s.anim).getString());
         for (String a : CpmBridge.listAnimations().keySet()) all.putIfAbsent("anim:" + a, Component.translatable("cpmwheel.eff.t.anim", a).getString());
     }

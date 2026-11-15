@@ -115,6 +115,13 @@ public class CondEditScreen extends Screen {
                         b -> { c.num = (c.num + 1) % 10; rebuildWidgets(); })
                         .tooltip(tip("cpmwheel.cond.lvl.help")).bounds(x + w - 46, y, 46, 20).build());
             }
+            case "emote" -> { // 1.8.1: an Emotecraft emote is playing (any or a named one)
+                Button b = Button.builder(Component.literal(font.plainSubstrByWidth(EmoteLogic.isAny(c.value) ? Component.translatable("cpmwheel.ec.any").getString() : c.value, w - 4)),
+                        bt -> minecraft.setScreen(new EmotePickerScreen(this, true, e -> c.value = e == null ? "" : e.name())))
+                        .tooltip(Tooltip.create(Component.translatable("cpmwheel.cond.t.emote.help").append(EmoteBridge.active(cfg) ? Component.empty()
+                                : Component.literal("\n").append(Component.translatable(EmoteBridge.present() ? "cpmwheel.ec.offnote" : "cpmwheel.ec.missing"))))).bounds(x, y, w, 20).build();
+                addRenderableWidget(b);
+            }
             case "anim" -> { // 1.7.2: a CPM / wheel animation is playing (value >= N)
                 addRenderableWidget(Button.builder(Component.literal(font.plainSubstrByWidth(c.value.isBlank() ? "?" : c.value, w - 50)),
                         b -> minecraft.setScreen(new TargetPickerScreen(this, cfg, v -> c.value = v)))

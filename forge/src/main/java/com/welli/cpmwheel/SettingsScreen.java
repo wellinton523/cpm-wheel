@@ -177,6 +177,22 @@ public class SettingsScreen extends Screen {
                 return List.of(b);
             }, () -> cfg.haIgnore.remove(key)));
         }
+        // ---- 1.8.1 Emotecraft (optional mod) ----
+        sec("compat", "emotecraft");
+        {
+            final boolean ecHere = EmoteBridge.present();
+            opts.add(new Opt(curCat, curSec, "cpmwheel.ec.on.help", (x, y, w) -> {
+                Button b = Button.builder(Component.translatable("cpmwheel.ec.on", onoff(cfg.ecOn)).append(ecHere ? Component.empty()
+                                : Component.translatable(EmoteBridge.status().equals("error") ? "cpmwheel.ec.st.error" : "cpmwheel.set.notinstalled")),
+                        bt -> { cfg.ecOn = !cfg.ecOn; apply(); rebuildWidgets(); }).bounds(x, y, w, 20).build();
+                b.active = ecHere || cfg.ecOn; // absent: can only be switched off
+                return List.of(b);
+            }, () -> cfg.ecOn = DEF.ecOn));
+            toggle("cpmwheel.ec.l2d.help", () -> Component.translatable("cpmwheel.ec.l2d", Component.translatable("cpmwheel.ec.l2d." + cfg.ecL2d)),
+                    () -> { int i = java.util.Arrays.asList(EmoteLogic.L2D_MODES).indexOf(cfg.ecL2d); cfg.ecL2d = EmoteLogic.L2D_MODES[(i + 1) % EmoteLogic.L2D_MODES.length]; },
+                    () -> cfg.ecL2d = DEF.ecL2d);
+            slider("cpmwheel.ec.kick", "cpmwheel.ec.kick.help", 0, 90, 5, () -> cfg.ecKick, v -> cfg.ecKick = v, DEF.ecKick);
+        }
 
         // ---- Avançado ----
         sec("advanced", "presets");

@@ -19,7 +19,7 @@ public class CondTypeScreen extends Screen {
     @Override
     protected void init() {
         int cols = width >= 520 ? 2 : 1, cw = Math.min(250, (width - 16 - (cols - 1) * 8) / cols);
-        String[] ts = TriggerLogic.TYPES;
+        String[] ts = types();
         int rows = (ts.length + cols - 1) / cols;
         int x0 = width / 2 - (cols * cw + (cols - 1) * 8) / 2, y0 = 30, rowH = Math.max(22, Math.min(30, (height - 40) / rows));
         for (int i = 0; i < ts.length; i++) {
@@ -36,7 +36,7 @@ public class CondTypeScreen extends Screen {
         g.fill(0, 0, width, height, 0xC0050A12);
         g.drawCenteredString(font, title, width / 2, 12, Style.accent(cfg));
         int cols = width >= 520 ? 2 : 1, cw = Math.min(250, (width - 16 - (cols - 1) * 8) / cols);
-        String[] ts = TriggerLogic.TYPES;
+        String[] ts = types();
         int rows = (ts.length + cols - 1) / cols;
         int x0 = width / 2 - (cols * cw + (cols - 1) * 8) / 2, y0 = 30, rowH = Math.max(22, Math.min(30, (height - 40) / rows));
         for (int i = 0; i < ts.length; i++) {
@@ -51,4 +51,9 @@ public class CondTypeScreen extends Screen {
     @Override public void renderBackground(GuiGraphics g, int mx, int my, float pt) {}
     @Override public void onClose() { minecraft.setScreen(parent); }
     @Override public boolean isPauseScreen() { return false; }
+    /** 1.8.1: "emote" only when Emotecraft is installed */
+    static String[] types() {
+        if (EmoteBridge.present()) return TriggerLogic.TYPES;
+        return java.util.Arrays.stream(TriggerLogic.TYPES).filter(t -> !"emote".equals(t)).toArray(String[]::new);
+    }
 }

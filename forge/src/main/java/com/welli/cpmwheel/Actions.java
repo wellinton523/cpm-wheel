@@ -87,7 +87,7 @@ public final class Actions {
         String lk = EffectTriggers.lockedBy(s);
         if (lk != null) { EffectTriggers.lockedFeedback(lk); return; } // 1.5.8: held by a trigger
         int prior = WheelConfig.RESET.equals(s.anim) ? -1 : CpmBridge.playing(s.anim);
-        if (s.isGroup() || s.isCond()) { WheelConfig.run(s); sound(cfg, 1.2f); Sounds.slot(cfg, s, prior); return; }
+        if (s.isGroup() || s.isCond() || s.isEc()) { WheelConfig.run(s); sound(cfg, 1.2f); Sounds.slot(cfg, s, prior); return; }
         String m = WheelConfig.RESET.equals(s.anim) ? "toggle" : s.effectiveMode();
         int cur = prior < 0 ? s.minV() : prior;
         switch (m) {

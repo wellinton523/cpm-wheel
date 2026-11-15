@@ -34,6 +34,7 @@ public final class Sounds {
         if (cfg == null || !cfg.customSounds || s == null || s.sound == null || s.sound.empty()) return;
         boolean on;
         if (s.isGroup()) on = s.groupState() == 2;
+        else if (s.isEc()) on = EmoteBridge.playing();
         else if (s.isCond() || WheelConfig.RESET.equals(s.anim)) on = true;
         else on = CpmBridge.playing(s.anim) != 0; // unknown (-1) counts as on
         play(cfg, s.sound, !on);

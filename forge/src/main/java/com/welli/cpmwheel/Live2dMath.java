@@ -23,7 +23,7 @@ public final class Live2dMath {
     /** input sources: angles in degrees, speeds as 10° per block/s; "prev" = the previous link's angle */
     public static final String[] INPUTS = {"headYaw", "headPitch", "bodyYaw", "headRel", "walk", "fwd", "side", "vert",
             // 1.8.0: falling speed, gravity / look (pitch), wind, damage / landing impulses, look-at, voice
-            "fall", "grav", "windF", "windS", "hit", "land", "lookYaw", "lookPitch", "voice", "layer", "prev"};
+            "fall", "grav", "windF", "windS", "hit", "land", "lookYaw", "lookPitch", "voice", "layer", "emote", "prev"}; // 1.8.1 emote = Emotecraft start/stop kick
     /** 1.8.0: sources whose sign flips when a chain is mirrored (left <-> right) */
     public static final String[] MIRROR = {"headYaw", "bodyYaw", "headRel", "side", "windS", "lookYaw"};
     /** how links sharing one CPM layer are combined */

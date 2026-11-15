@@ -2,7 +2,7 @@
 
 # CPM Wheel
 
-![versão](https://img.shields.io/badge/vers%C3%A3o-1.8.0-2ee6ff)
+![versão](https://img.shields.io/badge/vers%C3%A3o-1.8.1-2ee6ff)
 ![NeoForge 1.21.1](https://img.shields.io/badge/NeoForge-1.21.1%20(21.1.x)-orange)
 ![Forge 1.20.1](https://img.shields.io/badge/Forge-1.20.1%20(47.x)-blue)
 ![lado](https://img.shields.io/badge/lado-cliente-lightgrey)
@@ -15,7 +15,8 @@ Roda radial para organizar e tocar as animações do **[Customizable Player Mode
 - física de itens pendurados;
 - gatilhos automáticos com condições, transições e sons;
 - **Física Live2D** para cabelo, cauda e asas, escrita nas camadas de valor do CPM, com prévia ao vivo, vento, impactos, olhar, voz e respiração/piscar;
-- teclas de emotes, encadear animações e perfis automáticos por modelo.
+- teclas de emotes, encadear animações e perfis automáticos por modelo;
+- integração opcional com o **Emotecraft** (botão de emote, condição e física durante emotes).
 
 Autor: **Zeraph**. Mod só de cliente: o servidor não precisa ter.
 
@@ -29,6 +30,7 @@ Autor: **Zeraph**. Mod só de cliente: o servidor não precisa ter.
 - [Requisitos e instalação](#requisitos-e-instalação)
 - [Recursos](#recursos)
 - [Novidades da 1.8.0](#novidades-da-180)
+- [Emotecraft (1.8.1)](#emotecraft-181)
 - [Guia rápido: Física Live2D (cabelo)](#guia-rápido-física-live2d-cabelo)
 - [Configuração e teclas](#configuração-e-teclas)
 - [Compilar](#compilar)
@@ -214,6 +216,24 @@ Tudo vem **desligado** e não faz nada até você ligar.
 
 ---
 
+## Emotecraft (1.8.1)
+
+Integração **opcional** com o [Emotecraft](https://modrinth.com/mod/emotecraft), lida por reflexão: sem o Emotecraft nada muda e nada quebra. Vem desligada: **Configurações › Compatibilidade › Emotecraft**.
+
+| | NeoForge 1.21.1 | Forge 1.20.1 |
+|---|---|---|
+| Versão do Emotecraft | 2.4.x (API conferida no 2.4.12) | 2.2.7 (com PlayerAnimator) |
+| Listar emotes e tocar | ✔ | ✔ |
+| Parar emote | ✔ API pública (`stopEmote`) | ✔ função interna do Emotecraft (o 2.2.7 não tem "parar" na API pública) |
+| Saber se um emote toca (e qual) | ✔ | ✔ |
+
+- **Botão "Emote do Emotecraft"** na roda: tocar/parar, tocar ou parar qualquer emote.
+- **Condição "Emote (Emotecraft)"** (qualquer um ou pelo nome): Gatilhos de efeito, "Desativar quando" da Física Live2D e Encadear animações (botão **EC**).
+- **Física durante emotes:** nada, desligar as correntes, ou um tranco no começo/fim (entrada "Emote do Emotecraft (tranco)").
+- Os emotes do Emotecraft mexem nas partes vanilla do jogador; num modelo do CPM só as partes ligadas a elas acompanham.
+
+---
+
 ## Guia rápido: Física Live2D (cabelo)
 
 **No editor do CPM:**
@@ -255,7 +275,7 @@ Tudo vem **desligado** e não faz nada até você ligar.
   - `config/cpmwheel/icons/`: PNGs para os ícones `file:nome.png`;
   - `config/cpmwheel/l2d/`: presets da Física Live2D;
   - `config/cpmwheel/_profiles.json` e `config/cpmwheel/profiles/`: perfis automáticos por modelo.
-- A config tem número de versão (atual **24**) e é migrada sozinha ao atualizar o mod.
+- A config tem número de versão (atual **25**) e é migrada sozinha ao atualizar o mod.
 
 ---
 
@@ -291,6 +311,7 @@ Notas completas em cada [release](https://github.com/wellinton523/cpm-wheel/rele
 
 | Versão | Destaques |
 |---|---|
+| [1.8.1](https://github.com/wellinton523/cpm-wheel/releases/tag/v1.8.1) | Integração opcional com **Emotecraft**: botão de emote, condição "Emote (Emotecraft)" (gatilhos, encadear, desativar física), física durante emotes |
 | [1.8.0](https://github.com/wellinton523/cpm-wheel/releases/tag/v1.8.0) | Prévia ao vivo da física, vento, impactos, olhar, voz (Simple Voice Chat), animação em movimento, respirar/piscar, limite suave, espelhar, presets; teclas de emotes, encadear animações, perfis por modelo, ícone |
 | [1.7.3](https://github.com/wellinton523/cpm-wheel/releases/tag/v1.7.3) | Física Live2D: **Tranco ↔ Mantido** por entrada (velocidades mantêm o elo deslocado), velocidades suavizadas pelo deslocamento real |
 | [1.7.2](https://github.com/wellinton523/cpm-wheel/releases/tag/v1.7.2) | Física Live2D: **Desativar quando** (animações, voar, planar, nadar, montar, dormir…) com fade; condições novas nos Gatilhos |
@@ -318,6 +339,7 @@ Notas completas em cada [release](https://github.com/wellinton523/cpm-wheel/rele
   - o tempo de fade é por corrente, não por elo;
   - "Pausar c/ gatilho" é imediato, sem fade.
 - **Voz:** o Simple Voice Chat não informa o volume do seu próprio microfone, então a boca só sabe "falando / calado" e faz um abre-e-fecha sintético. É lido por reflexão; se o mod mudar por dentro, a entrada se desliga sozinha (aparece no log).
+- **Emotecraft:** a condição e a física olham só o seu personagem; animações e camadas próprias do CPM não são tocadas pelo Emotecraft. Se uma versão futura do Emotecraft mudar as funções usadas, a integração se desliga sozinha (aparece no log).
 - **Perfis automáticos:** o perfil troca a config inteira; não dá para escolher só algumas partes de um perfil.
 - **Gatilhos:**
   - "Chuva" vale para o mundo, mesmo debaixo de um teto ou num bioma seco;
@@ -353,5 +375,6 @@ Notas completas em cada [release](https://github.com/wellinton523/cpm-wheel/rele
   - "Disable when" conditions with fades.
   - 1.8.0: live preview, wind, impacts, look-at, voice (Simple Voice Chat), animation-driven input, breathing/blinking, soft limits, mirroring, presets.
 - 1.8.0: quick emote keys, chained animations, automatic per-model profiles. All new features are off by default.
+- 1.8.1: optional Emotecraft bridge (reflection, no hard dependency): emote wheel button, "Emotecraft emote playing" condition, physics off / kick during emotes. Emotecraft 2.4.x on NeoForge 1.21.1, 2.2.7 on Forge 1.20.1.
 
 Build with `./gradlew build` inside `neoforge/` (Java 21) or `forge/` (Java 17). License: MIT.

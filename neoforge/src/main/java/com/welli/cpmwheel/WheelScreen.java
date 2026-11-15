@@ -156,7 +156,7 @@ public class WheelScreen extends Screen {
 
     // ---------- live preview ----------
     private static boolean previewable(WheelConfig.Slot s) {
-        return s != null && !s.empty() && !s.isFolder() && !s.isGroup() && !s.isCond() && !WheelConfig.RESET.equals(s.anim);
+        return s != null && !s.empty() && !s.isFolder() && !s.isGroup() && !s.isCond() && !s.isEc() && !WheelConfig.RESET.equals(s.anim);
     }
 
     private static boolean isValue(WheelConfig.Slot s) { return previewable(s) && !"toggle".equals(s.effectiveMode()); }
@@ -306,7 +306,7 @@ public class WheelScreen extends Screen {
             }
             if (s.isCond() && s.lastMatch != null) g.drawCenteredString(font, font.plainSubstrByWidth(s.lastMatch, (int) (R * 0.7f)), (int) tx, (int) ty + Math.max(8, isz / 2 + 2) + (s.iconOnly(cfg) ? 0 : 4), 0x7FA8B8);
             if (EffectTriggers.lockedBy(s) != null) Hud.lock(g, (int) tx + isz / 2 + 4, (int) ty - isz / 2 - 2, 0xFFD23B); // 1.5.8 held by a trigger
-            int rem = s.empty() || s.isFolder() || s.isGroup() || s.isCond() ? -1 : Actions.remaining(s.anim);
+            int rem = s.empty() || s.isFolder() || s.isGroup() || s.isCond() || s.isEc() ? -1 : Actions.remaining(s.anim);
             if (rem >= 0) g.drawCenteredString(font, "\u23F1" + rem + "s", (int) tx, (int) ty + Math.max(8, isz / 2 + 2), 0xFFD23B);
         }
 

@@ -41,6 +41,9 @@ public final class Live2d {
 
     // ---------- 1.8.0 ----------
     private static final Live2dMath.Impulse HIT = new Live2dMath.Impulse(), LAND = new Live2dMath.Impulse();
+    /** 1.8.1 Emotecraft: kick on emote start / stop + edge tracking */
+    private static final Live2dMath.Impulse EMO = new Live2dMath.Impulse();
+    private static final EmoteLogic.Edge EMO_EDGE = new EmoteLogic.Edge();
     private static float prevHp = -1, lastVy = 0, lookY, lookP, voiceSm, windBiome = 1; private static int prevHurt, windTick; private static boolean wasGround = true;
     private static final Map<String, Live2dMath.LayerSig> LSIG = new HashMap<>();
     private static final Map<String, Live2dMath.GenState> GSTATE = new HashMap<>();
@@ -68,7 +71,7 @@ public final class Live2d {
 
     /** "Zerar física": restart from rest and rewrite every value */
     public static void reset() { STATES.clear(); WRITTEN.clear(); LOCAL.clear(); LIVE.clear(); SHARED.clear(); COMBINED.clear(); WEIGHTS.clear(); inputsInit = false;
-        LSIG.clear(); GSTATE.clear(); LIVEG.clear(); HIST.clear(); HIT.v = 0; LAND.v = 0; }
+        LSIG.clear(); GSTATE.clear(); LIVEG.clear(); HIST.clear(); HIT.v = 0; LAND.v = 0; EMO.v = 0; EMO_EDGE.playing = false; EMO_EDGE.name = ""; }
 
     /** config changed in a screen */
     public static void use(WheelConfig c) { cfg = c; cfgAt = System.currentTimeMillis(); }
@@ -119,6 +122,13 @@ public final class Live2d {
             } else { prevHp = -1; }
             wasGround = ground; lastVy = vyRaw;
             in.put("hit", Live2dMath.decay(HIT, 0.05f, 0.12f)); in.put("land", Live2dMath.decay(LAND, 0.05f, 0.12f));
+            // 1.8.1 Emotecraft: "off" suspends every chain while an emote plays (with the chain fade); "kick" feeds the "emote" input
+            boolean ecActive = EmoteBridge.active(c) && !"none".equals(c.ecL2d);
+            boolean ecPlaying = ecActive && EmoteBridge.playing();
+            boolean ecOff = ecPlaying && "off".equals(c.ecL2d);
+            if (ecActive && "kick".equals(c.ecL2d)) { if (EMO_EDGE.step(ecPlaying, EmoteBridge.playingName()) != 0) Live2dMath.kick(EMO, c.ecKick); }
+            else { EMO_EDGE.playing = false; EMO_EDGE.name = ""; }
+            in.put("emote", Live2dMath.decay(EMO, 0.05f, 0.12f));
             var level = p.level();
             if (c.l2dWindOn) {
                 net.minecraft.core.BlockPos bp = net.minecraft.core.BlockPos.containing(p.getX(), p.getEyeY() + 0.5, p.getZ());
@@ -186,7 +196,7 @@ public final class Live2d {
                 Live2dMath.stepChain(ch.links, st, in, 0.05f, out);
                 float[] wt = WEIGHTS.get(ch.id);
                 if (wt == null || wt.length != st.length) { wt = new float[st.length]; java.util.Arrays.fill(wt, 1f); WEIGHTS.put(ch.id, wt); }
-                boolean chainOff = snap != null && TriggerLogic.eval(ch.off, ch.offCombine, snap);
+                boolean chainOff = ecOff || (snap != null && TriggerLogic.eval(ch.off, ch.offCombine, snap));
                 for (int i = 0; i < st.length; i++) {
                     Live2dMath.Link l = ch.links.get(i);
                     boolean susp = chainOff || (snap != null && !l.off.isEmpty() && TriggerLogic.eval(l.off, l.offCombine, snap));

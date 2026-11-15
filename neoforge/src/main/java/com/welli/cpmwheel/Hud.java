@@ -33,6 +33,11 @@ public final class Hud {
     /** {value, color} if this slot should be listed, else null */
     private static String[] item(WheelConfig cfg, WheelConfig.Slot s) {
         if (s == null || s.empty() || s.isFolder() || WheelConfig.RESET.equals(s.anim)) return null;
+        if (s.isEc()) { // 1.8.1 Emotecraft button: playing / stopped
+            boolean on = EmoteBridge.playing() && ("stop".equals(s.ecAction) || EmoteLogic.matches(s.ecName, true, EmoteBridge.playingName()));
+            if (cfg.hudOnlyNonDefault && !on) return null;
+            return new String[]{on ? "\u25B6" : "\u25A0", Integer.toString(s.color)};
+        }
         if (s.isCond()) {
             if (s.lastMatch == null) return cfg.hudOnlyNonDefault ? null : new String[]{"-", Integer.toString(s.color)};
             return new String[]{s.lastMatch, Integer.toString(s.color)};
@@ -79,7 +84,7 @@ public final class Hud {
                 if (!visiting.add(s)) continue; // guards against a folder containing itself
                 any |= group(cfg, s.display(), s.color, s.children, depth + 1, outRows, outBars, visiting);
                 visiting.remove(s);
-            } else if (s.isGroup() || s.isCond() || seen.add(s.anim)) {
+            } else if (s.isGroup() || s.isCond() || s.isEc() || seen.add(s.anim)) {
                 String[] it = item(cfg, s);
                 if (it != null) { outRows.add(new Row(depth + 1, false, s.display(), it[0], Integer.parseInt(it[1]))); any = true; }
             }
@@ -102,7 +107,7 @@ public final class Hud {
         } else {
             Set<String> seen = new HashSet<>();
             for (WheelConfig.Slot s : cfg.allSlots()) {
-                if (s.empty() || s.isFolder() || (!s.isGroup() && !s.isCond() && !seen.add(s.anim))) continue;
+                if (s.empty() || s.isFolder() || (!s.isGroup() && !s.isCond() && !s.isEc() && !seen.add(s.anim))) continue;
                 String[] it = item(cfg, s);
                 if (it != null) r.add(new Row(0, false, s.display(), it[0], Integer.parseInt(it[1])));
             }

@@ -19,10 +19,16 @@ public final class ChainTriggers {
         for (ChainLogic.Rule r : cfg.chainRules) {
             seen.add(r.id);
             ChainLogic.State s = ST.computeIfAbsent(r.id, k -> new ChainLogic.State());
-            int pv = r.from.isBlank() ? -1 : cache.computeIfAbsent(r.from, CpmBridge::playing);
+            int pv = r.from.isBlank() ? -1 : cache.computeIfAbsent(r.from, ChainTriggers::playing);
             if (ChainLogic.step(r, s, pv, now)) fire(cfg, r);
         }
         ST.keySet().retainAll(seen);
+    }
+
+    /** 1.8.1: "ec:*" / "ec:<name>" = an Emotecraft emote (1 playing, 0 not, -1 bridge off / absent) */
+    static int playing(String from) {
+        if (EmoteLogic.isRef(from)) return EmoteBridge.active(WheelConfig.get()) ? (EmoteBridge.matches(EmoteLogic.refName(from)) ? 1 : 0) : -1;
+        return CpmBridge.playing(from);
     }
 
     static void fire(WheelConfig cfg, ChainLogic.Rule r) {

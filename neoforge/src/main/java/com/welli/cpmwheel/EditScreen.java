@@ -154,7 +154,8 @@ public class EditScreen extends Screen {
                 Component mc = m.isEmpty() ? Component.translatable("cpmwheel.edit.mode.auto", s.effectiveMode())
                         : Component.translatable(m.equals("toggle") ? "cpmwheel.edit.mode.toggle_s" : "cpmwheel.edit.mode." + m);
                 addRenderableWidget(Button.builder(mc, b -> {
-                    String[] order = {"", "toggle", "slider", "presets", "frames", "group", "cond"};
+                    String[] order = EmoteBridge.present() || s.isEc() ? new String[]{"", "toggle", "slider", "presets", "frames", "group", "cond", "ec"}
+                            : new String[]{"", "toggle", "slider", "presets", "frames", "group", "cond"}; // 1.8.1 "ec" only with Emotecraft
                     int i = java.util.Arrays.asList(order).indexOf(s.mode == null ? "" : s.mode);
                     s.mode = order[(i + 1) % order.length]; rebuildWidgets();
                 }).bounds(px, y, 160, 18).build());
@@ -163,6 +164,23 @@ public class EditScreen extends Screen {
                     if (s.groupMembers == null) { s.groupMembers = new ArrayList<>(); if (s.anim != null && !s.anim.isBlank() && !WheelConfig.RESET.equals(s.anim)) s.groupMembers.add(new WheelConfig.Member(s.anim)); }
                     addRenderableWidget(Button.builder(Component.translatable("cpmwheel.edit.group", s.groupList().size()),
                             b -> minecraft.setScreen(new GroupScreen(this, s))).bounds(px, y + 9, 160, 18).build());
+                } else if (s.isEc()) { // 1.8.1 Emotecraft emote button
+                    if (!EmoteBridge.active(cfg)) {
+                        Button nb = Button.builder(Component.translatable(EmoteBridge.present() ? "cpmwheel.ec.offnote" : "cpmwheel.ec.missing"), b -> {})
+                                .tooltip(net.minecraft.client.gui.components.Tooltip.create(Component.translatable("cpmwheel.ec.on.help"))).bounds(px, y + 9, 160, 18).build();
+                        nb.active = false; addRenderableWidget(nb); y += 22;
+                    }
+                    addRenderableWidget(Button.builder(Component.translatable("cpmwheel.ec.action", Component.translatable("cpmwheel.ec.action." + EmoteLogic.action(s.ecAction))), b -> {
+                        int i = java.util.Arrays.asList(EmoteLogic.ACTIONS).indexOf(EmoteLogic.action(s.ecAction));
+                        s.ecAction = EmoteLogic.ACTIONS[(i + 1) % EmoteLogic.ACTIONS.length]; rebuildWidgets(); })
+                            .tooltip(net.minecraft.client.gui.components.Tooltip.create(Component.translatable("cpmwheel.ec.action.help"))).bounds(px, y + 9, 160, 18).build());
+                    if (!"stop".equals(s.ecAction)) {
+                        Button pb = Button.builder(Component.translatable("cpmwheel.ec.emote", s.ecName == null || s.ecName.isBlank() ? "?" : s.ecName),
+                                b -> minecraft.setScreen(new EmotePickerScreen(this, false, e -> { if (e != null) { s.ecId = e.id().toString(); s.ecName = e.name(); } })))
+                                .tooltip(net.minecraft.client.gui.components.Tooltip.create(Component.translatable("cpmwheel.ec.emote.help"))).bounds(px, y + 31, 160, 18).build();
+                        pb.active = EmoteBridge.present();
+                        addRenderableWidget(pb);
+                    }
                 } else if (s.isCond()) {
                     if (s.rules == null) s.rules = new ArrayList<>();
                     addRenderableWidget(Button.builder(Component.translatable("cpmwheel.edit.cond", s.ruleList().size()),

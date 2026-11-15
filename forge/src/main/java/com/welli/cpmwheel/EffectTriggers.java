@@ -94,7 +94,7 @@ public final class EffectTriggers {
         if (s == null || s.empty() || s.isFolder() || HOLDS.isEmpty()) return null;
         if (WheelConfig.RESET.equals(s.anim)) { for (String a : HOLDS.keySet()) { String l = lockedAnim(a); if (l != null) return l; } return null; }
         if (s.isGroup()) { for (WheelConfig.Member m : s.groupList()) { String l = lockedAnim(m.anim); if (l != null) return l; } return null; }
-        if (s.isCond()) return null;
+        if (s.isCond() || s.isEc()) return null;
         return lockedAnim(s.anim);
     }
     /** locked feedback: action bar + low click */
@@ -261,6 +261,7 @@ public final class EffectTriggers {
         sn.swimming = p.isSwimming() || p.isVisuallySwimming();
         sn.riding = p.isPassenger();
         sn.sleeping = p.isSleeping();
+        sn.emote = v -> EmoteBridge.active(cfg) && EmoteBridge.matches(v);
         if (dead) { sn.sneaking = false; sn.sprinting = false; sn.flying = false; sn.gliding = false; sn.swimming = false; }
         return sn;
     }
@@ -310,6 +311,7 @@ public final class EffectTriggers {
             case "damage" -> Component.translatable("cpmwheel.cond.t.damage.v", Math.max(1, c.num)).getString();
             case "biome" -> Component.translatable("cpmwheel.cond.t.biome.v", c.value.isBlank() ? "?" : c.value).getString();
             case "dimension" -> Component.translatable("cpmwheel.cond.t.dimension.v", c.value.isBlank() ? "?" : c.value).getString();
+            case "emote" -> Component.translatable("cpmwheel.cond.t.emote.v", EmoteLogic.isAny(c.value) ? Component.translatable("cpmwheel.ec.any").getString() : c.value).getString();
             case "anim" -> Component.translatable("cpmwheel.cond.t.anim.v", c.value.isBlank() ? "?" : c.value).getString() + (c.num > 1 ? " \u2265" + c.num : "");
             case "hold" -> Component.translatable("cpmwheel.cond.t.hold.v", holdName(cfg, c.value), Component.translatable("cpmwheel.cond.hand." + Math.min(2, c.num))).getString();
             default -> Component.translatable("cpmwheel.cond.t." + c.type).getString();

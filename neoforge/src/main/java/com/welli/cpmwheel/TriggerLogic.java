@@ -14,7 +14,7 @@ public final class TriggerLogic {
     private TriggerLogic() {}
 
     public static final String[] TYPES = {"effect", "health", "damage", "night", "day", "rain", "thunder", "water", "biome", "dimension", "sneak", "sprint", "hold",
-            "anim", "fly", "glide", "swim", "ride", "sleep"}; // 1.7.2
+            "anim", "fly", "glide", "swim", "ride", "sleep", "emote"}; // 1.7.2, 1.8.1 emote
 
     /** one condition (also the stored config object) */
     public static class Cond {
@@ -44,6 +44,8 @@ public final class TriggerLogic {
         /** 1.7.2: (animation name, minimum value) -> it is playing with at least that value */
         public BiPredicate<String, Integer> anim = (v, n) -> false;
         public boolean flying, gliding, swimming, riding, sleeping;
+        /** 1.8.1: Emotecraft emote playing on the local player ("" / "*" any, or a name) */
+        public Predicate<String> emote = v -> false;
     }
 
     public static boolean night(Snapshot s) {
@@ -74,6 +76,7 @@ public final class TriggerLogic {
             case "swim" -> r = s.swimming;
             case "ride" -> r = s.riding;
             case "sleep" -> r = s.sleeping;
+            case "emote" -> r = s.emote.test(c.value == null ? "" : c.value.trim());
             default -> r = false;
         }
         return c.not != r;

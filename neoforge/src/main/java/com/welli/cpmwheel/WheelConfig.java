@@ -77,6 +77,9 @@ public class WheelConfig {
         public String fallback = "";
         public boolean condAuto = false;
         public boolean isCond() { return "cond".equals(mode); }
+        /** 1.8.1 "Emote do Emotecraft": plays / stops an Emotecraft emote (ecId = emote UUID, ecName = its name, ecAction toggle | play | stop) */
+        public String ecId = "", ecName = "", ecAction = "toggle";
+        public boolean isEc() { return "ec".equals(mode); }
         public List<Rule> ruleList() {
             List<Rule> l = new ArrayList<>();
             if (rules != null) for (Rule r : rules) if (r != null) l.add(r);
@@ -137,8 +140,9 @@ public class WheelConfig {
         }
         public Slot() {}
         public Slot(String a) { anim = a; }
-        public String display() { return label != null && !label.isBlank() ? label : (isFolder() ? "..." : isGroup() ? "Grupo" : isCond() ? "Condicional" : RESET.equals(anim) ? "Reset" : anim); }
-        public boolean empty() { return !isFolder() && !isGroup() && !isCond() && (anim == null || anim.isBlank()); }
+        public String display() { return label != null && !label.isBlank() ? label : (isFolder() ? "..." : isGroup() ? "Grupo" : isCond() ? "Condicional" : isEc() ? ecDisplay() : RESET.equals(anim) ? "Reset" : anim); }
+        public boolean empty() { return !isFolder() && !isGroup() && !isCond() && !isEc() && (anim == null || anim.isBlank()); }
+        public String ecDisplay() { return "stop".equals(ecAction) || ecName == null || ecName.isBlank() ? "\u25A0 Emotecraft" : ecName; }
     }
 
     /** group member: anim + action "on" | "off" | "toggle" | "value" (value or named frame) */
@@ -282,7 +286,7 @@ public class WheelConfig {
     public String centerMode = "player";
     /** center size in percent (50-200) */
     public int centerSize = 100;
-    public int configVersion = 24;
+    public int configVersion = 25;
     /** 1.6.0 global switches: extra trigger conditions, timed transitions, custom sounds (per-button / per-rule sounds) */
     public boolean trigCondsOn = true, trigTransOn = true, customSounds = true;
     /** 1.7.0 "Física Live2D": chains of CPM value layers driven by spring physics */
@@ -302,6 +306,10 @@ public class WheelConfig {
     /** 1.8.0 "Encadear animações": when an animation ends / starts, play another; off by default */
     public boolean chainTrigOn = false;
     public List<ChainLogic.Rule> chainRules = new ArrayList<>();
+    /** 1.8.1 Emotecraft bridge (optional mod, reflection): off by default. ecL2d: "none" | "off" (physics off while an emote plays) | "kick" */
+    public boolean ecOn = false;
+    public String ecL2d = "none";
+    public int ecKick = 30;
     private static final String LEGACY_DESIGN = "signalis";
     /** HUD grouped by wheel/folder with nested bars; false = flat list */
     public boolean hudGrouped = true;
@@ -490,6 +498,8 @@ public class WheelConfig {
                         c.l2dWindOn = c.l2dImpactOn = c.l2dLookOn = c.l2dVoiceOn = c.l2dLayerOn = c.l2dGenOn = false; c.emoteKeysOn = false; c.chainTrigOn = false;
                         if (c.haAdj != null) c.haAdj.entrySet().removeIf(e -> DEF_ADJ.containsKey(e.getKey()) && allZero(e.getValue()));
                         if (c.haArm != null) c.haArm.entrySet().removeIf(e -> DEF_ARM.containsKey(e.getKey()) && allZero(e.getValue())); }
+                    if (c.configVersion < 25) { c.configVersion = 25; // 1.8.1: Emotecraft bridge, off until turned on
+                        c.ecOn = false; c.ecL2d = "none"; c.ecKick = 30; }
                     c.fixup();
                     if (c.centerMode == null || c.centerMode.isBlank()) c.centerMode = "player";
                     if (c.hudCorner == null || c.hudCorner.isBlank()) c.hudCorner = "top_left";
@@ -574,6 +584,8 @@ public class WheelConfig {
         emoteKeys.replaceAll(k -> k == null ? "" : k);
         while (emoteKeys.size() < CpmWheel.EMOTE_KEYS) emoteKeys.add("");
         while (emoteKeys.size() > CpmWheel.EMOTE_KEYS) emoteKeys.remove(emoteKeys.size() - 1);
+        ecL2d = EmoteLogic.l2dMode(ecL2d);
+        ecKick = Math.max(0, Math.min(90, ecKick));
         if (chainRules == null) chainRules = new ArrayList<>();
         chainRules.removeIf(java.util.Objects::isNull);
         while (chainRules.size() > 32) chainRules.remove(chainRules.size() - 1);
@@ -851,6 +863,7 @@ public class WheelConfig {
         if (s == null || s.empty() || s.isFolder()) return;
         if (s.isGroup()) { toggleGroup(s); return; }
         if (s.isCond()) { Conditions.click(s); return; }
+        if (s.isEc()) { EmoteBridge.click(get(), s); return; }
         if (RESET.equals(s.anim)) CpmBridge.resetAll();
         else CpmBridge.play(s.anim, s.value);
     }
