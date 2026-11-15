@@ -18,6 +18,8 @@ public final class Live2d {
     private Live2d() {}
 
     private static final Map<String, Live2dMath.State[]> STATES = new HashMap<>();
+    /** 1.7.2: chainId -> physics weight per link (1 = on, 0 = faded to rest) */
+    private static final Map<String, float[]> WEIGHTS = new HashMap<>();
     /** anim -> last value written */
     private static final Map<String, Integer> WRITTEN = new LinkedHashMap<>();
     /** anim -> rest value (used when the physics lets go) */
@@ -38,7 +40,7 @@ public final class Live2d {
     public static boolean failed() { return failed; }
 
     /** "Zerar física": restart from rest and rewrite every value */
-    public static void reset() { STATES.clear(); WRITTEN.clear(); LOCAL.clear(); LIVE.clear(); SHARED.clear(); COMBINED.clear(); inputsInit = false; }
+    public static void reset() { STATES.clear(); WRITTEN.clear(); LOCAL.clear(); LIVE.clear(); SHARED.clear(); COMBINED.clear(); WEIGHTS.clear(); inputsInit = false; }
 
     /** config changed in a screen */
     public static void use(WheelConfig c) { cfg = c; cfgAt = System.currentTimeMillis(); }
@@ -68,6 +70,14 @@ public final class Live2d {
             in.put("headYaw", yawU); in.put("headPitch", p.getXRot()); in.put("bodyYaw", bodyU); in.put("headRel", headRel);
             in.put("walk", walk); in.put("fwd", fwd); in.put("side", side); in.put("vert", vert);
 
+            // 1.7.2 "Desativar quando": one snapshot per tick, only when some chain / link has conditions
+            TriggerLogic.Snapshot snap = null;
+            for (Live2dMath.Chain ch : c.l2dChains) {
+                if (!ch.on) continue;
+                boolean need = !ch.off.isEmpty();
+                for (Live2dMath.Link l : ch.links) need |= !l.off.isEmpty();
+                if (need) { snap = EffectTriggers.peek(p, c); break; }
+            }
             Set<String> driven = new HashSet<>(), paused = new HashSet<>(), seen = new HashSet<>();
             boolean anyChange = false;
             // 1.7.1: every link adds its value to its layer; layers are combined and written once per tick
@@ -83,20 +93,29 @@ public final class Live2d {
                 }
                 float[] out = new float[st.length];
                 Live2dMath.stepChain(ch.links, st, in, 0.05f, out);
+                float[] wt = WEIGHTS.get(ch.id);
+                if (wt == null || wt.length != st.length) { wt = new float[st.length]; java.util.Arrays.fill(wt, 1f); WEIGHTS.put(ch.id, wt); }
+                boolean chainOff = snap != null && TriggerLogic.eval(ch.off, ch.offCombine, snap);
                 for (int i = 0; i < st.length; i++) {
                     Live2dMath.Link l = ch.links.get(i);
-                    if (l.anim.isBlank()) { LIVE.put(ch.id + "#" + i, new float[]{out[i], -1, 0}); continue; }
+                    boolean susp = chainOff || (snap != null && !l.off.isEmpty() && TriggerLogic.eval(l.off, l.offCombine, snap));
+                    wt[i] = Live2dMath.fadeStep(wt[i], susp, ch.fadeMs, 0.05f);
+                    if (l.anim.isBlank()) { LIVE.put(ch.id + "#" + i, new float[]{out[i], -1, 0, wt[i], susp ? 1 : 0}); continue; }
                     int max = CpmBridge.maxValue(l.anim);
-                    int v = Live2dMath.toValue(out[i], l.min, l.max, max);
-                    LIVE.put(ch.id + "#" + i, new float[]{out[i], v, max});
-                    per.computeIfAbsent(l.anim, k -> new java.util.ArrayList<>()).add(new int[]{v, Live2dMath.toValue(0, l.min, l.max, max), max});
+                    int rest = Live2dMath.toValue(0, l.min, l.max, max);
+                    int v = Live2dMath.faded(Live2dMath.toValue(out[i], l.min, l.max, max), rest, wt[i]);
+                    LIVE.put(ch.id + "#" + i, new float[]{out[i], v, max, wt[i], susp ? 1 : 0});
+                    var lst = per.computeIfAbsent(l.anim, k -> new java.util.ArrayList<>());
+                    if (Live2dMath.released(wt[i], susp)) continue; // faded out: this link no longer writes the layer
+                    lst.add(new int[]{v, rest, max});
                 }
             }
             SHARED.clear(); COMBINED.clear();
             for (var e : per.entrySet()) {
                 String anim = e.getKey(); var list = e.getValue();
+                if (list.isEmpty()) { paused.add(anim); WRITTEN.remove(anim); dropLocal(anim); continue; } // every link suspended: hands the layer over (already at rest)
                 SHARED.put(anim, list.size());
-                if (c.l2dPauseTrig && EffectTriggers.held(anim)) { paused.add(anim); WRITTEN.remove(anim); continue; }
+                if (c.l2dPauseTrig && EffectTriggers.held(anim)) { paused.add(anim); WRITTEN.remove(anim); dropLocal(anim); continue; }
                 int[] vals = new int[list.size()], rests = new int[list.size()];
                 for (int i = 0; i < vals.length; i++) { vals[i] = list.get(i)[0]; rests[i] = list.get(i)[1]; }
                 int max = list.get(0)[2];
@@ -108,6 +127,7 @@ public final class Live2d {
                 if (old == null || old != v) { write(c, anim, v, max); WRITTEN.put(anim, v); anyChange = true; }
             }
             STATES.keySet().removeIf(k -> !seen.contains(k));
+            WEIGHTS.keySet().removeIf(k -> !seen.contains(k));
             LIVE.keySet().removeIf(k -> !seen.contains(k.substring(0, k.lastIndexOf('#'))));
             release(c, paused, driven);
             // local view: synced values come from the engine; local-only bytes are re-applied every tick (a server echo may overwrite them)
@@ -116,6 +136,13 @@ public final class Live2d {
             failed = true;
             CpmWheel.LOG.warn("[CPM Wheel] Física Live2D disabled after an error", t);
         }
+    }
+
+    /** stop forcing a local-only byte (the layer is handed over) */
+    private static void dropLocal(String anim) {
+        if (LOCAL.isEmpty()) return;
+        int[] pr = CpmBridge.layerParam(anim);
+        if (pr != null) LOCAL.remove(pr[0]);
     }
 
     private static void write(WheelConfig c, String anim, int v, int max) {

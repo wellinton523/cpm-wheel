@@ -13,7 +13,8 @@ import java.util.function.Predicate;
 public final class TriggerLogic {
     private TriggerLogic() {}
 
-    public static final String[] TYPES = {"effect", "health", "damage", "night", "day", "rain", "thunder", "water", "biome", "dimension", "sneak", "sprint", "hold"};
+    public static final String[] TYPES = {"effect", "health", "damage", "night", "day", "rain", "thunder", "water", "biome", "dimension", "sneak", "sprint", "hold",
+            "anim", "fly", "glide", "swim", "ride", "sleep"}; // 1.7.2
 
     /** one condition (also the stored config object) */
     public static class Cond {
@@ -40,6 +41,9 @@ public final class TriggerLogic {
         public Predicate<String> biome = v -> false;
         /** (item query or "grp:<id>", hand 0 any / 1 main / 2 off) */
         public BiPredicate<String, Integer> hold = (v, h) -> false;
+        /** 1.7.2: (animation name, minimum value) -> it is playing with at least that value */
+        public BiPredicate<String, Integer> anim = (v, n) -> false;
+        public boolean flying, gliding, swimming, riding, sleeping;
     }
 
     public static boolean night(Snapshot s) {
@@ -64,6 +68,12 @@ public final class TriggerLogic {
             case "sneak" -> r = s.sneaking;
             case "sprint" -> r = s.sprinting;
             case "hold" -> r = c.value != null && !c.value.isBlank() && s.hold.test(c.value.trim(), c.num);
+            case "anim" -> r = c.value != null && !c.value.isBlank() && s.anim.test(c.value.trim(), Math.max(1, c.num));
+            case "fly" -> r = s.flying;
+            case "glide" -> r = s.gliding;
+            case "swim" -> r = s.swimming;
+            case "ride" -> r = s.riding;
+            case "sleep" -> r = s.sleeping;
             default -> r = false;
         }
         return c.not != r;

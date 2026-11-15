@@ -4,7 +4,7 @@ import com.welli.cpmwheel.Live2dMath.State;
 import java.util.List;
 
 /** 1.7.0 offline check of the "Física Live2D" chain math and value mapping:
- *  javac -d /tmp/l2 src/main/java/com/welli/cpmwheel/Live2dMath.java tools/Live2dMathCheck.java && java -cp /tmp/l2 Live2dMathCheck */
+ *  javac -d /tmp/l2 src/main/java/com/welli/cpmwheel/Live2dMath.java src/main/java/com/welli/cpmwheel/TriggerLogic.java tools/Live2dMathCheck.java && java -cp /tmp/l2 Live2dMathCheck */
 public class Live2dMathCheck {
     static int fails = 0, n = 0;
     static void ok(String what, boolean v) { n++; if (!v) { fails++; System.out.println("FAIL " + what); } else System.out.println("OK   " + what); }
@@ -151,6 +151,36 @@ public class Live2dMathCheck {
         Link keep = new Link("prev", true); keep.input = "walk";
         Live2dMath.migrateLink(keep);
         ok("existing list is kept", keep.inputs.size() == 1 && keep.inputs.get(0).src.equals("prev"));
+
+        // ---------- 1.7.2 suspend: fade out / release / fade in ----------
+        float w = 1;
+        int steps = 0;
+        while (w > 0 && steps < 100) { w = Live2dMath.fadeStep(w, true, 300, 0.05f); steps++; }
+        ok("fade out 0.3 s = 6 ticks", steps == 6 && w == 0);
+        ok("halfway value during fade", Live2dMath.faded(228, 128, 0.5f) == 178);
+        ok("faded value at w=1 is the physics value", Live2dMath.faded(200, 128, 1f) == 200);
+        ok("faded value at w=0 is rest", Live2dMath.faded(10, 128, 0f) == 128);
+        // writes during the fade go monotonically to rest, then the link is released
+        float fw = 1; int last = 228; boolean mono = true, releasedEarly = false;
+        for (int i = 0; i < 6; i++) {
+            fw = Live2dMath.fadeStep(fw, true, 300, 0.05f);
+            int v = Live2dMath.faded(228, 128, fw);
+            if (v > last) mono = false; last = v;
+            if (i < 5 && Live2dMath.released(fw, true)) releasedEarly = true;
+        }
+        ok("fade-out writes go down to rest", mono && last == 128);
+        ok("released only after the fade", !releasedEarly && Live2dMath.released(fw, true));
+        ok("not released when resuming at w=0", !Live2dMath.released(0f, false));
+        steps = 0;
+        while (fw < 1 && steps < 100) { fw = Live2dMath.fadeStep(fw, false, 300, 0.05f); steps++; }
+        ok("fade in 0.3 s = 6 ticks", steps == 6 && fw == 1);
+        ok("fade 0 = instant", Live2dMath.fadeStep(1, true, 0, 0.05f) == 0 && Live2dMath.fadeStep(0, false, 0, 0.05f) == 1);
+        ok("resume mid-fade turns back", Live2dMath.fadeStep(0.5f, false, 300, 0.05f) > 0.5f);
+        ok("long fade 1 s: 20 ticks", Math.abs(Live2dMath.fadeStep(1, true, 1000, 0.05f) - 0.95f) < 1e-5f);
+        Live2dMath.Chain nc = new Live2dMath.Chain();
+        ok("config 22 defaults: no suspend conditions, OR, fade 0.3 s", nc.off.isEmpty() && "or".equals(nc.offCombine) && nc.fadeMs == 300 && new Link().off.isEmpty());
+        // shared layer: a released link drops out of the combine, the other keeps writing alone
+        ok("shared: only the active link remains", Live2dMath.combine(new int[]{150}, new int[]{128}, "sum", 255) == 150);
 
         System.out.println((fails == 0 ? "ALL OK " : "FAILED ") + (n - fails) + "/" + n);
         if (fails > 0) System.exit(1);

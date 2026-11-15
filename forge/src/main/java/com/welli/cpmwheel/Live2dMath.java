@@ -44,6 +44,9 @@ public final class Live2dMath {
         public int min = -45, max = 45;    // output angle mapped to value 0 .. maxValue
         public boolean invert = false;
         public boolean lag = true;         // true = "atraso" (a − x), false = "segue" (a)
+        /** 1.7.2 "Desativar quando" for this link only (the chain's list also applies) */
+        public List<TriggerLogic.Cond> off = new ArrayList<>();
+        public String offCombine = "or";
         public Link() {}
         public Link(String input, boolean lag) { inputs.add(new Input(input, 100, false)); this.lag = lag; }
         public Link add(String src, int weight, boolean invert) { inputs.add(new Input(src, weight, invert)); return this; }
@@ -54,6 +57,10 @@ public final class Live2dMath {
         public String id = "", name = "";
         public boolean on = true;
         public List<Link> links = new ArrayList<>();
+        /** 1.7.2 "Desativar quando": while these hold, the chain fades to rest and stops writing */
+        public List<TriggerLogic.Cond> off = new ArrayList<>();
+        public String offCombine = "or";
+        public int fadeMs = 300;
     }
 
     public static final class State { public float a, v; public boolean init; }
@@ -104,6 +111,19 @@ public final class Live2dMath {
         double rx = -Math.cos(r), rz = -Math.sin(r);  // right
         return new float[]{(float) (vx * fx + vz * fz), (float) (vx * rx + vz * rz)};
     }
+
+    // ---------- 1.7.2 suspend ("Desativar quando") ----------
+    /** physics weight w (1 = full physics, 0 = rest) moves toward 0 while suspended and back to 1, over fadeMs */
+    public static float fadeStep(float w, boolean suspended, int fadeMs, float dt) {
+        float target = suspended ? 0 : 1;
+        if (fadeMs <= 0) return target;
+        float d = dt * 1000f / fadeMs;
+        return w < target ? Math.min(target, w + d) : Math.max(target, w - d);
+    }
+    /** value written with weight w: rest + (v − rest)·w */
+    public static int faded(int v, int rest, float w) { return Math.round(rest + (v - rest) * clamp(w, 0, 1)); }
+    /** suspended and fully faded: stop writing this link (an animation may own the layer now) */
+    public static boolean released(float w, boolean suspended) { return suspended && w <= 0f; }
 
     /** config 20 -> 21: the single input becomes a one-entry list at 100 % */
     public static void migrateLink(Link l) {

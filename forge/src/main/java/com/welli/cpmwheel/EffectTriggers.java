@@ -254,7 +254,14 @@ public final class EffectTriggers {
             return q.contains(":") ? id.equals(q) : id.endsWith(":" + q);
         };
         sn.hold = (v, hand) -> (hand != 2 && holds(cfg, p.getMainHandItem(), v)) || (hand != 1 && holds(cfg, p.getOffhandItem(), v));
-        if (dead) { sn.sneaking = false; sn.sprinting = false; }
+        // 1.7.2
+        sn.anim = (v, n) -> CpmBridge.playing(v) >= n;
+        sn.flying = p.getAbilities().flying;
+        sn.gliding = p.isFallFlying();
+        sn.swimming = p.isSwimming() || p.isVisuallySwimming();
+        sn.riding = p.isPassenger();
+        sn.sleeping = p.isSleeping();
+        if (dead) { sn.sneaking = false; sn.sprinting = false; sn.flying = false; sn.gliding = false; sn.swimming = false; }
         return sn;
     }
     /** snapshot for screens (doesn't touch the "took damage" tracking) */
@@ -287,6 +294,8 @@ public final class EffectTriggers {
                 case "water" -> "minecraft:heart_of_the_sea"; case "biome" -> "minecraft:grass_block";
                 case "dimension" -> "minecraft:obsidian"; case "sneak" -> "minecraft:leather_boots";
                 case "sprint" -> "minecraft:feather"; case "hold" -> "minecraft:chest";
+                case "anim" -> "minecraft:armor_stand"; case "fly" -> "minecraft:phantom_membrane"; case "glide" -> "minecraft:elytra";
+                case "swim" -> "minecraft:tropical_fish"; case "ride" -> "minecraft:saddle"; case "sleep" -> "minecraft:red_bed";
                 default -> "";
             };
             if (!i.isEmpty()) return i;
@@ -301,6 +310,7 @@ public final class EffectTriggers {
             case "damage" -> Component.translatable("cpmwheel.cond.t.damage.v", Math.max(1, c.num)).getString();
             case "biome" -> Component.translatable("cpmwheel.cond.t.biome.v", c.value.isBlank() ? "?" : c.value).getString();
             case "dimension" -> Component.translatable("cpmwheel.cond.t.dimension.v", c.value.isBlank() ? "?" : c.value).getString();
+            case "anim" -> Component.translatable("cpmwheel.cond.t.anim.v", c.value.isBlank() ? "?" : c.value).getString() + (c.num > 1 ? " \u2265" + c.num : "");
             case "hold" -> Component.translatable("cpmwheel.cond.t.hold.v", holdName(cfg, c.value), Component.translatable("cpmwheel.cond.hand." + Math.min(2, c.num))).getString();
             default -> Component.translatable("cpmwheel.cond.t." + c.type).getString();
         };

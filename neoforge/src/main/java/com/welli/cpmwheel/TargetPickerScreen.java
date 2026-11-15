@@ -28,6 +28,7 @@ public class TargetPickerScreen extends Screen {
         this(parent, cfg, null, null);
         this.animPick = animPick;
         all.keySet().removeIf(k -> !k.startsWith("anim:"));
+        for (String n : CpmBridge.listAnimations(true, null).keySet()) all.putIfAbsent("anim:" + n, Component.translatable("cpmwheel.eff.t.anim", n).getString()); // 1.7.2: hidden / command ones too
     }
     public TargetPickerScreen(Screen parent, WheelConfig cfg, WheelConfig.EffectRule rule, WheelConfig.EffectAction editing) {
         super(Component.translatable("cpmwheel.eff.tpick")); this.parent = parent; this.cfg = cfg; this.rule = rule; this.editing = editing;

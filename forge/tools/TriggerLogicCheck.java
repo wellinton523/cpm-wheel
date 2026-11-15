@@ -43,6 +43,21 @@ public class TriggerLogicCheck {
         ok("hold off hand only", !TriggerLogic.test(c("hold", "lantern", 2), s));
         ok("unknown type false", !TriggerLogic.test(c("bogus", "", 0), s));
 
+        // 1.7.2 animation / pose conditions
+        s.anim = (v, min) -> v.equals("voar") ? 1 >= min : v.equals("fis_asas") && 128 >= min;
+        s.flying = true; s.gliding = false; s.swimming = false; s.riding = true; s.sleeping = false;
+        ok("anim playing (>=1)", TriggerLogic.test(c("anim", "voar", 1), s));
+        ok("anim num 0 counts as >=1", TriggerLogic.test(c("anim", "voar", 0), s));
+        ok("anim below minimum", !TriggerLogic.test(c("anim", "voar", 2), s));
+        ok("value layer >= 100", TriggerLogic.test(c("anim", "fis_asas", 100), s));
+        ok("other anim not playing", !TriggerLogic.test(c("anim", "andar", 1), s));
+        ok("empty anim never", !TriggerLogic.test(c("anim", "", 1), s));
+        ok("flying", TriggerLogic.test(c("fly", "", 0), s));
+        ok("not gliding", !TriggerLogic.test(c("glide", "", 0), s));
+        ok("riding", TriggerLogic.test(c("ride", "", 0), s));
+        ok("not swimming / sleeping", !TriggerLogic.test(c("swim", "", 0), s) && !TriggerLogic.test(c("sleep", "", 0), s));
+        ok("suspend list OR: voar or glide", TriggerLogic.eval(List.of(c("anim", "voar", 1), c("glide", "", 0)), "or", s));
+
         // night / day
         Snapshot d = new Snapshot();
         d.dayTime = 18000; ok("18000 night", TriggerLogic.night(d) && !TriggerLogic.test(c("day", "", 0), d));

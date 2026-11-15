@@ -268,7 +268,7 @@ public class WheelConfig {
     public String centerMode = "player";
     /** center size in percent (50-200) */
     public int centerSize = 100;
-    public int configVersion = 21;
+    public int configVersion = 22;
     /** 1.6.0 global switches: extra trigger conditions, timed transitions, custom sounds (per-button / per-rule sounds) */
     public boolean trigCondsOn = true, trigTransOn = true, customSounds = true;
     /** 1.7.0 "Física Live2D": chains of CPM value layers driven by spring physics */
@@ -399,6 +399,8 @@ public class WheelConfig {
                     if (c.configVersion < 20) { c.configVersion = 20; c.l2dOn = false; c.l2dSync = true; c.l2dPauseTrig = true; } // 1.7.0: Física Live2D (off by default)
                     if (c.configVersion < 21) { c.configVersion = 21; // 1.7.1: one input per link -> weighted input list (100 %)
                         if (c.l2dChains != null) for (Live2dMath.Chain ch : c.l2dChains) if (ch != null && ch.links != null) for (Live2dMath.Link l : ch.links) if (l != null) Live2dMath.migrateLink(l); }
+                    if (c.configVersion < 22) { c.configVersion = 22; // 1.7.2: "Desativar quando" (empty = never) + fade 0.3 s
+                        if (c.l2dChains != null) for (Live2dMath.Chain ch : c.l2dChains) if (ch != null) { if (ch.off == null) ch.off = new ArrayList<>(); if (ch.fadeMs <= 0) ch.fadeMs = 300; } }
                     c.fixup();
                     if (c.centerMode == null || c.centerMode.isBlank()) c.centerMode = "player";
                     if (c.hudCorner == null || c.hudCorner.isBlank()) c.hudCorner = "top_left";
@@ -431,6 +433,15 @@ public class WheelConfig {
         if (r.conds == null) r.conds = new ArrayList<>();
         if (r.conds.isEmpty() && r.effect != null && !r.effect.isBlank()) r.conds.add(new TriggerLogic.Cond("effect", r.effect, Math.max(0, r.minAmp)));
         if (r.combine == null) r.combine = "and";
+    }
+
+    /** 1.7.2: null-safe condition list with known types */
+    static List<TriggerLogic.Cond> fixConds(List<TriggerLogic.Cond> l) {
+        if (l == null) l = new ArrayList<>();
+        l.removeIf(c -> c == null || !java.util.Arrays.asList(TriggerLogic.TYPES).contains(c.type));
+        for (TriggerLogic.Cond c : l) { if (c.value == null) c.value = ""; c.num = Math.max(0, Math.min(255, c.num)); }
+        while (l.size() > 12) l.remove(l.size() - 1);
+        return l;
     }
 
     static void fixSound(SoundSpec sp) {
@@ -479,7 +490,10 @@ public class WheelConfig {
             if (ch.links == null) ch.links = new ArrayList<>();
             ch.links.removeIf(java.util.Objects::isNull);
             while (ch.links.size() > 8) ch.links.remove(ch.links.size() - 1);
+            ch.off = fixConds(ch.off); if (!"and".equals(ch.offCombine)) ch.offCombine = "or";
+            ch.fadeMs = Math.max(0, Math.min(3000, ch.fadeMs));
             for (Live2dMath.Link l : ch.links) {
+                l.off = fixConds(l.off); if (!"and".equals(l.offCombine)) l.offCombine = "or";
                 if (l.anim == null) l.anim = "";
                 Live2dMath.migrateLink(l);
                 l.inputs.removeIf(in -> in == null || !java.util.Arrays.asList(Live2dMath.INPUTS).contains(in.src));

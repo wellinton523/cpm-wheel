@@ -102,7 +102,13 @@ public class Live2dScreen extends Screen {
         Button up = Button.builder(Component.translatable("cpmwheel.l2d.chain.up"), b -> { move(cfg.l2dChains, ci, -1); rebuildWidgets(); }).bounds(x2, y2, 74, 20).build();
         up.active = ci > 0; addRenderableWidget(up);
         Button dn = Button.builder(Component.translatable("cpmwheel.l2d.chain.down"), b -> { move(cfg.l2dChains, ci, 1); rebuildWidgets(); }).bounds(x2 + 76, y2, 74, 20).build();
-        dn.active = ci < cfg.l2dChains.size() - 1; addRenderableWidget(dn); y2 += 26;
+        dn.active = ci < cfg.l2dChains.size() - 1; addRenderableWidget(dn); y2 += 22;
+        // 1.7.2 "Desativar quando"
+        addRenderableWidget(Button.builder(Component.translatable(ch.off.isEmpty() ? "cpmwheel.l2d.off" : "cpmwheel.l2d.off.n", ch.off.size()), b -> minecraft.setScreen(
+                new CondEditScreen(this, cfg, Component.translatable("cpmwheel.l2d.off.title"), ch.off, () -> ch.offCombine, v -> ch.offCombine = v,
+                        () -> ch.name.isBlank() ? "?" : ch.name).suspendMode(() -> ch.fadeMs, v -> ch.fadeMs = v)))
+                .tooltip(Tooltip.create(Component.translatable("cpmwheel.l2d.off.help").append(ch.off.isEmpty() ? Component.empty() : Component.literal("\n\n" + condsText(ch.off, ch.offCombine)))))
+                .bounds(x2, y2, 150, 20).build()); y2 += 26;
         linksY = y2;
         if (selLink >= ch.links.size()) selLink = Math.max(0, ch.links.size() - 1);
         for (int i = 0; i < ch.links.size(); i++) {
@@ -178,15 +184,20 @@ public class Live2dScreen extends Screen {
         slider(x3 + w3 - h3, y3, h3, "cpmwheel.l2d.gain", 0, 300, 10, () -> l.gain, v -> l.gain = v, "%"); y3 += 22;
         slider(x3, y3, h3, "cpmwheel.l2d.min", -180, 180, 5, () -> l.min, v -> l.min = v, "\u00B0");
         slider(x3 + w3 - h3, y3, h3, "cpmwheel.l2d.max", -180, 180, 5, () -> l.max, v -> l.max = v, "\u00B0"); y3 += 22;
-        int third = (w3 - 4) / 3;
+        int q = (w3 - 6) / 4;
         Button lu = Button.builder(Component.literal("\u25B2"), b -> { move(ch.links, selLink, -1); selLink--; Live2d.reset(); rebuildWidgets(); })
-                .tooltip(tip("cpmwheel.l2d.link.up")).bounds(x3, y3, third, 20).build();
+                .tooltip(tip("cpmwheel.l2d.link.up")).bounds(x3, y3, q, 20).build();
         lu.active = selLink > 0; addRenderableWidget(lu);
         Button ld = Button.builder(Component.literal("\u25BC"), b -> { move(ch.links, selLink, 1); selLink++; Live2d.reset(); rebuildWidgets(); })
-                .tooltip(tip("cpmwheel.l2d.link.down")).bounds(x3 + third + 2, y3, third, 20).build();
+                .tooltip(tip("cpmwheel.l2d.link.down")).bounds(x3 + q + 2, y3, q, 20).build();
         ld.active = selLink < ch.links.size() - 1; addRenderableWidget(ld);
-        addRenderableWidget(Button.builder(Component.translatable("cpmwheel.l2d.link.del"), b -> { ch.links.remove(l); Live2d.reset(); rebuildWidgets(); })
-                .bounds(x3 + 2 * (third + 2), y3, w3 - 2 * (third + 2), 20).build());
+        addRenderableWidget(Button.builder(Component.literal("\u23F8" + (l.off.isEmpty() ? "" : l.off.size())), b -> minecraft.setScreen(
+                new CondEditScreen(this, cfg, Component.translatable("cpmwheel.l2d.off.link.title"), l.off, () -> l.offCombine, v -> l.offCombine = v,
+                        () -> (ch.name.isBlank() ? "?" : ch.name) + " \u203A " + (selLink + 1) + ". " + (l.anim.isBlank() ? "\u2014" : l.anim)).suspendMode(null, null)))
+                .tooltip(Tooltip.create(Component.translatable("cpmwheel.l2d.off.link.help").append(l.off.isEmpty() ? Component.empty() : Component.literal("\n\n" + condsText(l.off, l.offCombine)))))
+                .bounds(x3 + 2 * (q + 2), y3, q, 20).build());
+        addRenderableWidget(Button.builder(Component.literal("\u2716"), b -> { ch.links.remove(l); Live2d.reset(); rebuildWidgets(); })
+                .tooltip(tip("cpmwheel.l2d.link.del.help")).bounds(x3 + 3 * (q + 2), y3, w3 - 3 * (q + 2), 20).build());
         liveY = y3 + 24;
     }
 
@@ -196,6 +207,13 @@ public class Live2dScreen extends Screen {
         int n = 0;
         for (Live2dMath.Chain c : cfg.l2dChains) if (c.on) for (Live2dMath.Link l : c.links) if (anim.equals(l.anim)) n++;
         return n;
+    }
+    static String condsText(List<TriggerLogic.Cond> cs, String combine) {
+        WheelConfig cfg = WheelConfig.get();
+        String j = " " + Component.translatable("or".equals(combine) ? "cpmwheel.cond.or" : "cpmwheel.cond.and").getString() + " ";
+        StringBuilder sb = new StringBuilder();
+        for (TriggerLogic.Cond c : cs) { if (sb.length() > 0) sb.append(j); sb.append(EffectTriggers.condText(cfg, c)); }
+        return sb.toString();
     }
     static Component inputsText(Live2dMath.Link l) {
         if (l.inputs.isEmpty()) return Component.translatable("cpmwheel.l2d.in.none");
@@ -245,7 +263,7 @@ public class Live2dScreen extends Screen {
             if (lv != null) {
                 if (lv[1] >= 0 && lv[2] > 0) {
                     int fw = Math.round(bw * lv[1] / lv[2]);
-                    g.fill(x, y + 4, x + fw, y + 14, 0xA02EE6FF);
+                    g.fill(x, y + 4, x + fw, y + 14, lv.length > 4 && lv[4] > 0 ? 0xA0FFC04A : 0xA02EE6FF);
                     g.fill(x + bw / 2, y + 3, x + bw / 2 + 1, y + 15, 0xFFFFFFFF);
                 }
                 String t = lv[1] >= 0 ? String.valueOf((int) lv[1]) : Math.round(lv[0]) + "\u00B0";
@@ -262,6 +280,8 @@ public class Live2dScreen extends Screen {
             if (sh > 1 && y3 + 10 < height - 4) g.drawString(font, font.plainSubstrByWidth(Component.translatable("cpmwheel.l2d.shared.live", sh,
                     Component.translatable("cpmwheel.l2d.mode." + cfg.l2dModes.getOrDefault(l.anim, "sum")), comb == null ? "-" : String.valueOf(comb)).getString(), w3), x3, y3 + 10, 0xFFC04A);
             String held = cfg.l2dPauseTrig && EffectTriggers.held(l.anim) ? " " + Component.translatable("cpmwheel.l2d.paused").getString() : "";
+            if (lv != null && lv.length > 4 && lv[4] > 0) held += " " + Component.translatable(lv[3] <= 0 ? "cpmwheel.l2d.susp.done" : "cpmwheel.l2d.susp.fading").getString();
+            else if (lv != null && lv.length > 3 && lv[3] < 1) held += " " + Component.translatable("cpmwheel.l2d.susp.back").getString();
             String txt = lv == null ? Component.translatable("cpmwheel.l2d.live.none").getString()
                     : Component.translatable("cpmwheel.l2d.live", Math.round(lv[0]), lv[1] < 0 ? "-" : String.valueOf((int) lv[1]), lv[2] <= 0 ? "-" : String.valueOf((int) lv[2])).getString() + held;
             if (y3 < height - 4) g.drawString(font, font.plainSubstrByWidth(txt, w3), x3, y3, 0xCFE8F0);
