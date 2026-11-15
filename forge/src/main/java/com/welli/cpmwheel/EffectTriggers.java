@@ -79,6 +79,8 @@ public final class EffectTriggers {
     }
 
     // ---------- 1.5.8 lock: buttons of animations held by a trigger ----------
+    /** 1.7.0: a trigger rule currently holds (overrides) this animation */
+    public static boolean held(String anim) { return anim != null && HOLDS.containsKey(anim); }
     /** name of the active locking rule holding this animation, or null */
     public static String lockedAnim(String anim) {
         if (anim == null) return null;

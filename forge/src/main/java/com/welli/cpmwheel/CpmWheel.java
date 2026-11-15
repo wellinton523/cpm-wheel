@@ -65,6 +65,7 @@ public class CpmWheel {
     }
 
     private void tick(TickEvent.ClientTickEvent e) {
+        if (e.phase == TickEvent.Phase.START) { Live2d.tickStart(Minecraft.getInstance()); return; } // 1.7.0 Física Live2D
         if (e.phase != TickEvent.Phase.END) return;
         Minecraft mc = Minecraft.getInstance();
         Actions.tick(mc);

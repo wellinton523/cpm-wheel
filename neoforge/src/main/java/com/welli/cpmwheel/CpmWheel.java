@@ -39,6 +39,8 @@ public class CpmWheel {
         bus.addListener(this::keys);
         bus.addListener(this::imc);
         NeoForge.EVENT_BUS.addListener(this::tick);
+        // 1.7.0 Física Live2D: before CPM's own tick sends the gesture data
+        NeoForge.EVENT_BUS.addListener((ClientTickEvent.Pre e) -> Live2d.tickStart(Minecraft.getInstance()));
         HandAnim.detectConflicts(id -> ModList.get().isLoaded(id));
         NeoForge.EVENT_BUS.addListener((net.neoforged.neoforge.client.event.RenderFrameEvent.Pre e) -> HandAnim.frameStart());
         NeoForge.EVENT_BUS.addListener((net.neoforged.neoforge.client.event.RenderLevelStageEvent e) -> {

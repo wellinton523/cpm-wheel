@@ -151,6 +151,10 @@ public class SettingsScreen extends Screen {
         sec("effects", "effects");
         bool("cpmwheel.eff.master", "cpmwheel.eff.master.help", () -> cfg.effOn, v -> cfg.effOn = v, DEF.effOn);
         link("cpmwheel.set.link.effects", "cpmwheel.set.tip.link.effects", () -> new EffectTriggersScreen(this, cfg));
+        // ---- 1.7.0 Física Live2D ----
+        sec("effects", "live2d");
+        bool("cpmwheel.l2d.on", "cpmwheel.l2d.on.help", () -> cfg.l2dOn, v -> { cfg.l2dOn = v; Live2d.reset(); }, DEF.l2dOn);
+        link("cpmwheel.set.link.l2d", "cpmwheel.set.tip.link.l2d", () -> new Live2dScreen(this, cfg));
 
         // ---- Compatibilidade ----
         sec("compat", "compat");

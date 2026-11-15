@@ -268,9 +268,12 @@ public class WheelConfig {
     public String centerMode = "player";
     /** center size in percent (50-200) */
     public int centerSize = 100;
-    public int configVersion = 19;
+    public int configVersion = 20;
     /** 1.6.0 global switches: extra trigger conditions, timed transitions, custom sounds (per-button / per-rule sounds) */
     public boolean trigCondsOn = true, trigTransOn = true, customSounds = true;
+    /** 1.7.0 "Física Live2D": chains of CPM value layers driven by spring physics */
+    public boolean l2dOn = false, l2dSync = true, l2dPauseTrig = true;
+    public List<Live2dMath.Chain> l2dChains = new ArrayList<>();
     private static final String LEGACY_DESIGN = "signalis";
     /** HUD grouped by wheel/folder with nested bars; false = flat list */
     public boolean hudGrouped = true;
@@ -391,6 +394,7 @@ public class WheelConfig {
                     if (c.configVersion < 18) c.configVersion = 18; // 1.5.9: physics with gravity (old arrays upgraded in fixup), "Igual nas duas mãos"
                     if (c.configVersion < 19) { c.configVersion = 19; c.trigCondsOn = true; c.trigTransOn = true; c.customSounds = true; // 1.6.0: effect rules -> condition lists
                         if (c.effRules != null) for (EffectRule r : c.effRules) if (r != null) migrateRule(r); }
+                    if (c.configVersion < 20) { c.configVersion = 20; c.l2dOn = false; c.l2dSync = true; c.l2dPauseTrig = true; } // 1.7.0: Física Live2D (off by default)
                     c.fixup();
                     if (c.centerMode == null || c.centerMode.isBlank()) c.centerMode = "player";
                     if (c.hudCorner == null || c.hudCorner.isBlank()) c.hudCorner = "top_left";
@@ -461,6 +465,25 @@ public class WheelConfig {
         haFlat.removeIf(k -> k == null || java.util.Arrays.asList(HandAnim.CATS).indexOf(k) < 0);
         if (haGroups == null) haGroups = new ArrayList<>();
         haGroups.removeIf(java.util.Objects::isNull);
+        // 1.7.0 Física Live2D
+        if (l2dChains == null) l2dChains = new ArrayList<>();
+        l2dChains.removeIf(java.util.Objects::isNull);
+        java.util.Set<String> cids = new java.util.HashSet<>();
+        for (Live2dMath.Chain ch : l2dChains) {
+            if (ch.id == null || ch.id.isBlank() || !cids.add(ch.id)) { ch.id = newId("c"); cids.add(ch.id); }
+            if (ch.name == null) ch.name = "";
+            if (ch.links == null) ch.links = new ArrayList<>();
+            ch.links.removeIf(java.util.Objects::isNull);
+            while (ch.links.size() > 8) ch.links.remove(ch.links.size() - 1);
+            for (Live2dMath.Link l : ch.links) {
+                if (l.anim == null) l.anim = "";
+                if (!java.util.Arrays.asList(Live2dMath.INPUTS).contains(l.input)) l.input = "headYaw";
+                l.len = Math.max(10, Math.min(400, l.len)); l.weight = Math.max(10, Math.min(500, l.weight));
+                l.damp = Math.max(0, Math.min(100, l.damp)); l.gain = Math.max(0, Math.min(300, l.gain));
+                l.min = Math.max(-180, Math.min(180, l.min)); l.max = Math.max(-180, Math.min(180, l.max));
+            }
+        }
+        while (l2dChains.size() > 16) l2dChains.remove(l2dChains.size() - 1);
         java.util.Set<String> gids = new java.util.HashSet<>();
         for (ItemGroup g : haGroups) {
             if (g.id == null || g.id.isBlank() || !gids.add(g.id)) { g.id = newId("g"); gids.add(g.id); }
