@@ -153,7 +153,9 @@ public class Live2dScreen extends Screen {
             int sw = w3 - 40 - 54;
             addRenderableWidget(Button.builder(Component.literal(font.plainSubstrByWidth(Component.translatable("cpmwheel.l2d.in." + in.src + ".short").getString(), sw - 6)), b -> {
                 List<String> ins = java.util.Arrays.asList(Live2dMath.INPUTS);
-                in.src = ins.get((ins.indexOf(in.src) + 1) % ins.size()); Live2d.reset(); rebuildWidgets(); })
+                String old = in.src; in.src = ins.get((ins.indexOf(in.src) + 1) % ins.size());
+                if (in.hold == Live2dMath.defaultHold(old)) in.hold = Live2dMath.defaultHold(in.src); // 1.7.3: keep a changed mix, else the new source's default
+                Live2d.reset(); rebuildWidgets(); })
                 .tooltip(Tooltip.create(Component.translatable("cpmwheel.l2d.in." + in.src).append("\n").append(Component.translatable("cpmwheel.l2d.in." + in.src + ".help"))
                         .append("\n\n").append(Component.translatable("cpmwheel.l2d.input.help")))).bounds(x3, y3, sw, 20).build());
             addRenderableWidget(new AbstractSliderButton(x3 + sw + 2, y3, 52, 20, Component.literal(in.weight + "%"), in.weight / 300.0) {
@@ -165,6 +167,14 @@ public class Live2dScreen extends Screen {
             addRenderableWidget(Button.builder(Component.literal("\u2716"), b -> { l.inputs.remove(in); Live2d.reset(); rebuildWidgets(); })
                     .bounds(x3 + w3 - 18, y3, 18, 20).build());
             y3 += 21;
+            // 1.7.3 "Tranco ↔ Mantido": how much of this input keeps the link displaced (only for "atraso"; "prev" is always a swing)
+            if (l.lag && !"prev".equals(in.src)) {
+                addRenderableWidget(new AbstractSliderButton(x3 + 10, y3, w3 - 28, 14, Component.translatable("cpmwheel.l2d.hold", in.hold), in.hold / 100.0) {
+                    @Override protected void updateMessage() { setMessage(Component.translatable("cpmwheel.l2d.hold", in.hold)); }
+                    @Override protected void applyValue() { in.hold = (int) Math.round(value * 20) * 5; }
+                }).setTooltip(tip("cpmwheel.l2d.hold.help"));
+                y3 += 16;
+            }
         }
         if (l.inputs.size() < 4) {
             addRenderableWidget(Button.builder(Component.translatable("cpmwheel.l2d.in.add"), b -> {
@@ -222,6 +232,7 @@ public class Live2dScreen extends Screen {
             Live2dMath.Input in = l.inputs.get(i);
             if (i > 0) m.append(" + ");
             m.append(Component.translatable("cpmwheel.l2d.in." + in.src)).append(" " + (in.invert ? "\u2212" : "") + in.weight + "%");
+            if (l.lag && in.hold > 0 && !"prev".equals(in.src)) m.append(" (").append(Component.translatable("cpmwheel.l2d.hold.short", in.hold)).append(")");
         }
         return m;
     }

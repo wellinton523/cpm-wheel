@@ -33,7 +33,11 @@ public final class Live2d {
     public static int shared(String anim) { return SHARED.getOrDefault(anim, 0); }
     public static Integer combined(String anim) { return COMBINED.get(anim); }
     private static float yawU, bodyU; private static boolean inputsInit = false;
-    private static double lastY; private static boolean failed = false;
+    private static double lastX, lastY, lastZ; private static boolean failed = false;
+    /** 1.7.3: smoothed speeds (walk, fwd, side, vert) */
+    private static float sWalk, sFwd, sSide, sVert;
+    /** speed smoothing time constant (s) and dead zone (in input units: 10° per block/s) */
+    static final float SPEED_TAU = 0.15f, SPEED_DZ = 0.5f;
     private static WheelConfig cfg; private static long cfgAt = 0;
 
     public static float[] live(String chainId, int i) { return LIVE.get(chainId + "#" + i); }
@@ -57,14 +61,21 @@ public final class Live2d {
             if (mc.isPaused()) return;
             // inputs (degrees; speeds as 10° per block/s)
             float yaw = p.getYHeadRot(), body = p.yBodyRot;
-            if (!inputsInit) { yawU = yaw; bodyU = body; lastY = p.getY(); inputsInit = true; }
+            if (!inputsInit) { yawU = yaw; bodyU = body; lastX = p.getX(); lastY = p.getY(); lastZ = p.getZ(); sWalk = sFwd = sSide = sVert = 0; inputsInit = true; }
             yawU = Live2dMath.unwrap(yawU, yaw); bodyU = Live2dMath.unwrap(bodyU, body);
-            var mv = p.getDeltaMovement();
-            float walk = (float) Math.sqrt(mv.x * mv.x + mv.z * mv.z) * 20f * 10f;
-            float vert = (float) (p.getY() - lastY) * 20f * 10f; lastY = p.getY();
+            // 1.7.3: real displacement per tick (getDeltaMovement is the velocity AFTER friction: ×0.55 on the ground but
+            // ×0.91 in the air, so walking speed jumped on every hop), smoothed so tick noise and spikes don't flicker
+            double dx = p.getX() - lastX, dy = p.getY() - lastY, dz = p.getZ() - lastZ;
+            lastX = p.getX(); lastY = p.getY(); lastZ = p.getZ();
+            if (dx * dx + dy * dy + dz * dz > 4.0) { dx = dy = dz = 0; } // teleport: no swing
+            float walk = (float) Math.sqrt(dx * dx + dz * dz) * 20f * 10f;
+            float vert = (float) dy * 20f * 10f;
             if (p.onGround() && Math.abs(vert) < 0.5f) vert = 0;
-            float[] rel = Live2dMath.bodyRelative(mv.x, mv.z, body); // signed, relative to the body facing
-            float fwd = rel[0] * 20f * 10f, side = rel[1] * 20f * 10f;   // + forward / + right
+            float[] rel = Live2dMath.bodyRelative(dx, dz, body); // signed, relative to the body facing
+            sWalk = Live2dMath.smooth(sWalk, walk, 0.05f, SPEED_TAU); sVert = Live2dMath.smooth(sVert, vert, 0.05f, SPEED_TAU);
+            sFwd = Live2dMath.smooth(sFwd, rel[0] * 20f * 10f, 0.05f, SPEED_TAU); sSide = Live2dMath.smooth(sSide, rel[1] * 20f * 10f, 0.05f, SPEED_TAU);
+            walk = Live2dMath.deadZone(sWalk, SPEED_DZ); vert = Live2dMath.deadZone(sVert, SPEED_DZ);
+            float fwd = Live2dMath.deadZone(sFwd, SPEED_DZ), side = Live2dMath.deadZone(sSide, SPEED_DZ);   // + forward / + right
             float headRel = Live2dMath.unwrap(0, yaw - body);
             Map<String, Float> in = new HashMap<>();
             in.put("headYaw", yawU); in.put("headPitch", p.getXRot()); in.put("bodyYaw", bodyU); in.put("headRel", headRel);

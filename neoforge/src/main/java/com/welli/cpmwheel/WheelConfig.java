@@ -268,7 +268,7 @@ public class WheelConfig {
     public String centerMode = "player";
     /** center size in percent (50-200) */
     public int centerSize = 100;
-    public int configVersion = 22;
+    public int configVersion = 23;
     /** 1.6.0 global switches: extra trigger conditions, timed transitions, custom sounds (per-button / per-rule sounds) */
     public boolean trigCondsOn = true, trigTransOn = true, customSounds = true;
     /** 1.7.0 "Física Live2D": chains of CPM value layers driven by spring physics */
@@ -401,6 +401,8 @@ public class WheelConfig {
                         if (c.l2dChains != null) for (Live2dMath.Chain ch : c.l2dChains) if (ch != null && ch.links != null) for (Live2dMath.Link l : ch.links) if (l != null) Live2dMath.migrateLink(l); }
                     if (c.configVersion < 22) { c.configVersion = 22; // 1.7.2: "Desativar quando" (empty = never) + fade 0.3 s
                         if (c.l2dChains != null) for (Live2dMath.Chain ch : c.l2dChains) if (ch != null) { if (ch.off == null) ch.off = new ArrayList<>(); if (ch.fadeMs <= 0) ch.fadeMs = 300; } }
+                    if (c.configVersion < 23) { c.configVersion = 23; // 1.7.3: velocity inputs hold the link displaced (75 %), angles unchanged
+                        if (c.l2dChains != null) for (Live2dMath.Chain ch : c.l2dChains) if (ch != null && ch.links != null) for (Live2dMath.Link l : ch.links) Live2dMath.migrateHold(l); }
                     c.fixup();
                     if (c.centerMode == null || c.centerMode.isBlank()) c.centerMode = "player";
                     if (c.hudCorner == null || c.hudCorner.isBlank()) c.hudCorner = "top_left";
@@ -497,7 +499,7 @@ public class WheelConfig {
                 if (l.anim == null) l.anim = "";
                 Live2dMath.migrateLink(l);
                 l.inputs.removeIf(in -> in == null || !java.util.Arrays.asList(Live2dMath.INPUTS).contains(in.src));
-                for (Live2dMath.Input in : l.inputs) in.weight = Math.max(0, Math.min(300, in.weight));
+                for (Live2dMath.Input in : l.inputs) { in.weight = Math.max(0, Math.min(300, in.weight)); in.hold = Math.max(0, Math.min(100, in.hold)); }
                 while (l.inputs.size() > 4) l.inputs.remove(l.inputs.size() - 1);
                 l.len = Math.max(10, Math.min(400, l.len)); l.weight = Math.max(10, Math.min(500, l.weight));
                 l.damp = Math.max(0, Math.min(100, l.damp)); l.gain = Math.max(0, Math.min(300, l.gain));

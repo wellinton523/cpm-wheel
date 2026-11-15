@@ -11,6 +11,10 @@ import java.util.List;
  * The first link of a chain follows a body input (head yaw, head pitch, body yaw, walk speed, vertical speed);
  * the next links usually use "prev" = the previous link's angle, so the tips lag behind the center.
  * Output: "atraso" (lag) = a − x, the bend relative to what drives it (for a hair bone parented to the head / center),
+ *         1.7.3: each input has a "Tranco ↔ Mantido" mix h (0..100 %). The held part xh moves the spring's equilibrium,
+ *         so a sustained input keeps the link displaced: target = x − 2·xh, lag output = a − (x − xh) → settles at −xh
+ *         (the same side as the swing, e.g. wings stay back while walking). h = 0 is the 1.7.0–1.7.2 behaviour
+ *         (pure impulse: a steady input settles back to rest).
  *         "segue" (follow) = a itself. The output angle is mapped linearly from [min, max] to the CPM value 0..maxValue.
  */
 public final class Live2dMath {
@@ -26,8 +30,10 @@ public final class Live2dMath {
         public String src = "headYaw";
         public int weight = 100;           // % (0..300)
         public boolean invert = false;
+        /** 1.7.3 "Tranco ↔ Mantido": 0 = only the swing on changes (old), 100 = the input holds the link displaced */
+        public int hold = 0;
         public Input() {}
-        public Input(String src, int weight, boolean invert) { this.src = src; this.weight = weight; this.invert = invert; }
+        public Input(String src, int weight, boolean invert) { this.src = src; this.weight = weight; this.invert = invert; this.hold = defaultHold(src); }
     }
 
     /** one link (also the stored config object) */
@@ -62,6 +68,25 @@ public final class Live2dMath {
         public String offCombine = "or";
         public int fadeMs = 300;
     }
+
+    /** 1.7.3: velocity inputs default to mostly sustained, angles (head / body) stay impulse-only like before */
+    public static final int HOLD_SPEED = 75;
+    public static boolean isSpeed(String src) { return "walk".equals(src) || "fwd".equals(src) || "side".equals(src) || "vert".equals(src); }
+    public static int defaultHold(String src) { return isSpeed(src) ? HOLD_SPEED : 0; }
+    /** config 22 -> 23: existing velocity inputs gain the sustained behaviour */
+    public static void migrateHold(Link l) {
+        if (l == null || l.inputs == null) return;
+        for (Input in : l.inputs) if (in != null && in.hold == 0) in.hold = defaultHold(in.src);
+    }
+
+    /** 1.7.3 speed smoothing: exponential low-pass with time constant tau (s), then a small dead zone around 0 */
+    public static float smooth(float prev, float raw, float dt, float tau) {
+        if (Float.isNaN(prev) || Float.isInfinite(prev)) prev = 0;
+        if (Float.isNaN(raw) || Float.isInfinite(raw)) raw = 0;
+        float k = tau <= 0 ? 1 : 1 - (float) Math.exp(-dt / tau);
+        return prev + (raw - prev) * k;
+    }
+    public static float deadZone(float v, float dz) { return Math.abs(v) < dz ? 0 : v; }
 
     public static final class State { public float a, v; public boolean init; }
 
@@ -145,13 +170,32 @@ public final class Live2dMath {
         return x;
     }
 
+    /** 1.7.3: the held part of the drive (Σ contribution · hold %); "prev" is never held */
+    public static float held(Link l, java.util.Map<String, Float> src) {
+        float x = 0;
+        if (l.inputs == null) return 0;
+        for (Input in : l.inputs) {
+            if (in == null || "prev".equals(in.src)) continue;
+            float v = src == null ? 0 : src.getOrDefault(in.src, 0f);
+            x += v * clamp(in.weight, 0, 300) / 100f * (in.invert ? -1 : 1) * clamp(in.hold, 0, 100) / 100f;
+        }
+        return x;
+    }
+
+    /** 1.7.3: one link step with drive x and held part xh (both after the link's intensity); returns the output angle */
+    public static float stepLink(State s, float x, float xh, Link p, float dt) {
+        if (!p.lag) { step(s, x, p, dt); return output(s, x, p); }  // "segue" already keeps a held input
+        step(s, x - 2 * xh, p, dt);
+        return output(s, x - xh, p);
+    }
+
     /** steps a whole chain with named input sources; out[i] = output angle */
     public static float[] stepChain(List<Link> links, State[] st, java.util.Map<String, Float> src, float dt, float[] out) {
         for (int i = 0; i < links.size(); i++) {
             Link p = links.get(i);
-            float x = drive(p, src, i == 0 ? 0 : st[i - 1].a) * clamp(p.gain, 0, 300) / 100f;
-            step(st[i], x, p, dt);
-            out[i] = output(st[i], x, p);
+            float g = clamp(p.gain, 0, 300) / 100f;
+            float x = drive(p, src, i == 0 ? 0 : st[i - 1].a) * g;
+            out[i] = stepLink(st[i], x, held(p, src) * g, p, dt);
         }
         return out;
     }
@@ -183,8 +227,7 @@ public final class Live2dMath {
             java.util.Map<String, Float> m = new java.util.HashMap<>();
             for (String k : INPUTS) m.put(k, ext[i]);  // test helper: every source reads ext[i]
             float x = drive(p, m, i == 0 ? 0 : st[i - 1].a) * g;
-            step(st[i], x, p, dt);
-            out[i] = output(st[i], x, p);
+            out[i] = stepLink(st[i], x, held(p, m) * g, p, dt);
         }
         return out;
     }

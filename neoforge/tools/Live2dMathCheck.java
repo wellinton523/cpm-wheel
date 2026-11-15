@@ -182,8 +182,97 @@ public class Live2dMathCheck {
         // shared layer: a released link drops out of the combine, the other keeps writing alone
         ok("shared: only the active link remains", Live2dMath.combine(new int[]{150}, new int[]{128}, "sum", 255) == 150);
 
+
+        // ---------- 1.7.3 "Tranco ↔ Mantido" ----------
+        ok("defaults: speeds 75 %, angles / prev 0 %", Live2dMath.defaultHold("fwd") == 75 && Live2dMath.defaultHold("walk") == 75 && Live2dMath.defaultHold("side") == 75
+                && Live2dMath.defaultHold("vert") == 75 && Live2dMath.defaultHold("headYaw") == 0 && Live2dMath.defaultHold("bodyYaw") == 0 && Live2dMath.defaultHold("prev") == 0);
+        ok("new speed input gets 75 %, Gson-style empty input 0 %", new Live2dMath.Input("fwd", 20, true).hold == 75 && new Live2dMath.Input().hold == 0);
+        {   // migration 22 -> 23: old velocity inputs (hold 0) gain 75 %, angle inputs and edited values unchanged
+            Link ml = new Link(); Live2dMath.Input a = new Live2dMath.Input(); a.src = "fwd"; Live2dMath.Input b = new Live2dMath.Input(); b.src = "headYaw";
+            Live2dMath.Input c = new Live2dMath.Input(); c.src = "side"; c.hold = 40;
+            ml.inputs.add(a); ml.inputs.add(b); ml.inputs.add(c);
+            Live2dMath.migrateHold(ml);
+            ok("migration: fwd 0 -> 75, headYaw stays 0, edited side 40 kept", a.hold == 75 && b.hold == 0 && c.hold == 40);
+        }
+        // wings: walking forward (fwd 43 = 4.3 blocks/s), input fwd 20 % inverted, lag
+        float walkOld = settleWalk(0), walkNew = settleWalk(75), walkFull = settleWalk(100);
+        ok("mix 0 %: steady walking settles back to rest (old behaviour)", near(walkOld, 0, 0.3f));
+        ok("mix 75 %: steady walking holds an offset (0.75 · 8.6 = 6.45°)", near(walkNew, 6.45f, 0.3f));
+        ok("mix 100 %: holds the full input (8.6°)", near(walkFull, 8.6f, 0.3f));
+        ok("held offset is on the same side as the start swing", firstSwing(75) > 0 && walkNew > 0 && firstSwing(0) > 0);
+        {   // mix 0 % = exactly the 1.7.2 math
+            Link a0 = new Link("fwd", true).add("headYaw", 50, false); for (Live2dMath.Input in : a0.inputs) in.hold = 0; a0.damp = 25;
+            State x0 = new State(), y0 = new State(); boolean same = true;
+            java.util.Map<String, Float> m = new java.util.HashMap<>();
+            for (int i = 0; i < 120; i++) {
+                m.put("fwd", i < 60 ? 43f : 0f); m.put("headYaw", (float) (30 * Math.sin(i * 0.2)));
+                float[] o = Live2dMath.stepChain(List.of(a0), new State[]{x0}, m, 0.05f, new float[1]);
+                float x = Live2dMath.drive(a0, m, 0); Live2dMath.step(y0, x, a0, 0.05f);
+                if (!near(o[0], Live2dMath.output(y0, x, a0), 1e-4f)) same = false;
+            }
+            ok("mix 0 %: identical to 1.7.2 (a − x)", same);
+        }
+        {   // stop: returns to rest, crossing it (a swing), then settles
+            Link wg = wing(75); State ws = new State(); java.util.Map<String, Float> m = new java.util.HashMap<>(); float[] o = new float[1];
+            m.put("fwd", 0f); Live2dMath.stepChain(List.of(wg), new State[]{ws}, m, 0.05f, o);
+            m.put("fwd", 43f); for (int i = 0; i < 200; i++) Live2dMath.stepChain(List.of(wg), new State[]{ws}, m, 0.05f, o);
+            m.put("fwd", 0f); float minO = 1e9f;
+            for (int i = 0; i < 40; i++) { Live2dMath.stepChain(List.of(wg), new State[]{ws}, m, 0.05f, o); minO = Math.min(minO, o[0]); }
+            ok("stopping swings past rest (overshoot below 0)", minO < -0.5f);
+            for (int i = 0; i < 300; i++) Live2dMath.stepChain(List.of(wg), new State[]{ws}, m, 0.05f, o);
+            ok("after stopping it settles at rest", near(o[0], 0, 0.3f));
+        }
+        {   // prev never holds; follow ignores the mix
+            Link pl = new Link("prev", true); java.util.Map<String, Float> m = new java.util.HashMap<>();
+            ok("prev input is never held", Live2dMath.held(pl, m) == 0);
+            Link fl = new Link("fwd", false); State fs = new State(); m.put("fwd", 0f); float[] o = new float[1];
+            Live2dMath.stepChain(List.of(fl), new State[]{fs}, m, 0.05f, o); m.put("fwd", 40f);
+            for (int i = 0; i < 300; i++) Live2dMath.stepChain(List.of(fl), new State[]{fs}, m, 0.05f, o);
+            ok("follow output keeps the input (40)", near(o[0], 40, 0.3f));
+        }
+        // speed smoothing: ground/air hops and tiny spikes don't flicker
+        {
+            float sv = 0; for (int i = 0; i < 40; i++) sv = Live2dMath.smooth(sv, 43, 0.05f, 0.15f);
+            ok("smoothing converges to the steady speed", near(sv, 43, 0.1f));
+            float lo = 1e9f, hi = -1e9f;
+            for (int i = 0; i < 100; i++) { sv = Live2dMath.smooth(sv, (i % 12 < 6) ? 43 : 56, 0.05f, 0.15f); if (i > 20) { lo = Math.min(lo, sv); hi = Math.max(hi, sv); } }
+            ok("hopping 43/56 stays between, never near 0", lo > 40 && hi < 58);
+            float sp = 43; boolean drop = false;
+            for (int i = 0; i < 40; i++) { sp = Live2dMath.smooth(sp, i == 10 ? 0 : 43, 0.05f, 0.15f); if (Live2dMath.deadZone(sp, 0.5f) == 0) drop = true; }
+            ok("one zero tick does not turn walking off", !drop && sp > 42);
+            ok("dead zone removes tiny drift", Live2dMath.deadZone(0.3f, 0.5f) == 0 && Live2dMath.deadZone(-0.3f, 0.5f) == 0 && Live2dMath.deadZone(5, 0.5f) == 5);
+            ok("smooth is NaN-safe", Float.isFinite(Live2dMath.smooth(Float.NaN, Float.NaN, 0.05f, 0.15f)));
+            // the held output with a noisy, smoothed speed stays steady (no on/off flicker)
+            Link wg = wing(75); State ws = new State(); java.util.Map<String, Float> m = new java.util.HashMap<>(); float[] o = new float[1];
+            float s2 = 0; m.put("fwd", 0f); Live2dMath.stepChain(List.of(wg), new State[]{ws}, m, 0.05f, o);
+            float omin = 1e9f, omax = -1e9f; java.util.Random rnd = new java.util.Random(7);
+            for (int i = 0; i < 400; i++) {
+                float raw = 43 + (rnd.nextFloat() - 0.5f) * 8 + ((i % 15 < 7) ? 0 : 10) + (rnd.nextInt(25) == 0 ? -43 : 0);
+                s2 = Live2dMath.smooth(s2, raw, 0.05f, 0.15f); m.put("fwd", Live2dMath.deadZone(s2, 0.5f));
+                Live2dMath.stepChain(List.of(wg), new State[]{ws}, m, 0.05f, o);
+                if (i > 100) { omin = Math.min(omin, o[0]); omax = Math.max(omax, o[0]); }
+            }
+            ok("noisy walking: offset stays clearly away from rest (" + omin + ".." + omax + ")", omin > 3f);
+        }
+
         System.out.println((fails == 0 ? "ALL OK " : "FAILED ") + (n - fails) + "/" + n);
         if (fails > 0) System.exit(1);
+    }
+
+    static Link wing(int hold) { Link w = new Link("fwd", true); w.inputs.get(0).weight = 20; w.inputs.get(0).invert = true; w.inputs.get(0).hold = hold; w.damp = 25; return w; }
+    /** output after 10 s of steady forward walking */
+    static float settleWalk(int hold) {
+        Link w = wing(hold); State s = new State(); java.util.Map<String, Float> m = new java.util.HashMap<>(); float[] o = new float[1];
+        m.put("fwd", 0f); Live2dMath.stepChain(List.of(w), new State[]{s}, m, 0.05f, o);
+        m.put("fwd", 43f); for (int i = 0; i < 200; i++) Live2dMath.stepChain(List.of(w), new State[]{s}, m, 0.05f, o);
+        return o[0];
+    }
+    /** largest output in the first 0.5 s after starting to walk */
+    static float firstSwing(int hold) {
+        Link w = wing(hold); State s = new State(); java.util.Map<String, Float> m = new java.util.HashMap<>(); float[] o = new float[1];
+        m.put("fwd", 0f); Live2dMath.stepChain(List.of(w), new State[]{s}, m, 0.05f, o);
+        m.put("fwd", 43f); float mx = 0; for (int i = 0; i < 10; i++) { Live2dMath.stepChain(List.of(w), new State[]{s}, m, 0.05f, o); mx = Math.max(mx, o[0]); }
+        return mx;
     }
 
     static float maxAngle(int damp) {

@@ -1,6 +1,6 @@
 # CPM Wheel
 
-![versão](https://img.shields.io/badge/vers%C3%A3o-1.7.2-2ee6ff)
+![versão](https://img.shields.io/badge/vers%C3%A3o-1.7.3-2ee6ff)
 ![NeoForge 1.21.1](https://img.shields.io/badge/NeoForge-1.21.1%20(21.1.x)-orange)
 ![Forge 1.20.1](https://img.shields.io/badge/Forge-1.20.1%20(47.x)-blue)
 ![lado](https://img.shields.io/badge/lado-cliente-lightgrey)
@@ -172,6 +172,7 @@ Fica em Configurações › Gatilhos de efeito › **Física Live2D** e vem **de
 
   A prévia ao vivo mostra o ângulo e o valor.
 - **Camadas compartilhadas:** vários elos (até de correntes diferentes) na mesma camada são combinados por **Soma**, **Média** ou **Maior**, limitados a 0..máx e escritos uma vez por tick. O indicador ⧉N mostra quantos elos dividem a camada.
+- **Tranco ↔ Mantido (1.7.3):** em cada entrada (saída "atraso"), 0% = só balanço quando a entrada muda; 100% = a entrada mantém o elo deslocado enquanto dura (ex.: asas para trás enquanto anda), com balanço ao começar e ao parar. Padrão: velocidades 75%, giros 0%. As velocidades são medidas pelo deslocamento real e suavizadas (≈0,15 s).
 - **Desativar quando:**
   - condições por corrente, ou só para um elo com ⏸, que suspendem a física (ex.: animação "voar" tocando, planando);
   - o valor volta ao repouso com **fade** (padrão 0,3 s) e o mod para de escrever na camada, deixando a outra animação controlar;
@@ -221,7 +222,7 @@ Fica em Configurações › Gatilhos de efeito › **Física Live2D** e vem **de
   - `config/cpmwheel/<perfil do modelo>.json`: uma config por modelo do CPM; sem modelo, `default.json`;
   - `config/cpmwheel/presets/`: presets salvos em Avançado › Presets e perfil;
   - `config/cpmwheel/icons/`: PNGs para os ícones `file:nome.png`.
-- A config tem número de versão (atual **22**) e é migrada sozinha ao atualizar o mod.
+- A config tem número de versão (atual **23**) e é migrada sozinha ao atualizar o mod.
 
 ---
 
@@ -257,6 +258,7 @@ Notas completas em cada [release](https://github.com/wellinton523/cpm-wheel/rele
 
 | Versão | Destaques |
 |---|---|
+| [1.7.3](https://github.com/wellinton523/cpm-wheel/releases/tag/v1.7.3) | Física Live2D: **Tranco ↔ Mantido** por entrada (velocidades mantêm o elo deslocado), velocidades suavizadas pelo deslocamento real |
 | [1.7.2](https://github.com/wellinton523/cpm-wheel/releases/tag/v1.7.2) | Física Live2D: **Desativar quando** (animações, voar, planar, nadar, montar, dormir…) com fade; condições novas nos Gatilhos |
 | [1.7.1](https://github.com/wellinton523/cpm-wheel/releases/tag/v1.7.1) | Várias entradas por elo, camadas compartilhadas (Soma/Média/Maior), andar frente/trás e para os lados |
 | [1.7.0](https://github.com/wellinton523/cpm-wheel/releases/tag/v1.7.0) | **Física Live2D**: correntes de camadas de valor com física de mola |
