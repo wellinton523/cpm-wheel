@@ -174,6 +174,8 @@ public class EditScreen extends Screen {
                         int i = java.util.Arrays.asList(EmoteLogic.ACTIONS).indexOf(EmoteLogic.action(s.ecAction));
                         s.ecAction = EmoteLogic.ACTIONS[(i + 1) % EmoteLogic.ACTIONS.length]; rebuildWidgets(); })
                             .tooltip(net.minecraft.client.gui.components.Tooltip.create(Component.translatable("cpmwheel.ec.action.help"))).bounds(px, y + 9, 160, 18).build());
+                    addRenderableWidget(Button.builder(Component.translatable("cpmwheel.ec.icon", Component.translatable(s.ecIcon ? "options.on" : "options.off")), b -> { s.ecIcon = !s.ecIcon; rebuildWidgets(); })
+                            .tooltip(net.minecraft.client.gui.components.Tooltip.create(Component.translatable("cpmwheel.ec.icon.help"))).bounds(px, y + 53, 160, 18).build()); // 1.8.2
                     if (!"stop".equals(s.ecAction)) {
                         Button pb = Button.builder(Component.translatable("cpmwheel.ec.emote", s.ecName == null || s.ecName.isBlank() ? "?" : s.ecName),
                                 b -> minecraft.setScreen(new EmotePickerScreen(this, false, e -> { if (e != null) { s.ecId = e.id().toString(); s.ecName = e.name(); } })))
@@ -326,7 +328,7 @@ public class EditScreen extends Screen {
             Draw.sector(g, cx, cy, R - 3, R, a0, a1, Draw.argb(s.empty() ? 0x334455 : s.color, 230));
             float tx = cx + (float) Math.sin(i * seg) * (r0 + R) / 2, ty = cy - (float) Math.cos(i * seg) * (r0 + R) / 2;
             int textY = (int) ty - 4;
-            if (Icons.has(s.icon)) { Icons.draw(g, s.icon, (int) tx, (int) ty - 6, 16); textY = (int) ty + 4; }
+            if (Icons.has(s.iconKey())) { Icons.draw(g, s.iconKey(), (int) tx, (int) ty - 6, 16); textY = (int) ty + 4; }
             String l = s.empty() ? (i + 1) + "" : (s.isFolder() ? "\u25B8 " : "") + s.display();
             g.drawCenteredString(font, font.plainSubstrByWidth(l, (int) (R * 0.7f)), (int) tx, textY, s.empty() ? 0x55667A : 0xFFFFFF);
             if (s.favorite) g.drawString(font, "\u2605", (int) tx - 3, textY + 10, 0xFFD23B);

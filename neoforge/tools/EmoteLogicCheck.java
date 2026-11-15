@@ -66,6 +66,24 @@ public class EmoteLogicCheck {
         ok("stop: stops any", EmoteLogic.click("stop", "", true, "Dance").equals("stop") && EmoteLogic.click("stop", "", false, "").equals("none"));
         ok("no emote chosen: toggle only stops", EmoteLogic.click("toggle", "", true, "x").equals("stop") && EmoteLogic.click("toggle", "", false, "").equals("none"));
         ok("bad action -> toggle; bad physics mode -> none", EmoteLogic.action("x").equals("toggle") && EmoteLogic.l2dMode("x").equals("none") && EmoteLogic.l2dMode("kick").equals("kick"));
+        // 1.8.2 icon + details
+        byte[] png = {(byte) 0x89, 'P', 'N', 'G', 0x0D, 0x0A, 0x1A, 0x0A, 0, 0, 0, 13};
+        ok("PNG signature accepted", EmoteLogic.isPng(png));
+        ok("not PNG / null / too short rejected", !EmoteLogic.isPng(new byte[]{1, 2, 3, 4, 5, 6, 7, 8, 9}) && !EmoteLogic.isPng(null) && !EmoteLogic.isPng(java.util.Arrays.copyOf(png, 8)));
+        java.nio.ByteBuffer bb = java.nio.ByteBuffer.wrap(png); bb.position(5);
+        byte[] got = EmoteLogic.bytes(bb);
+        ok("ByteBuffer read from the start, whole icon", java.util.Arrays.equals(got, png));
+        ok("original ByteBuffer position untouched", bb.position() == 5);
+        java.nio.ByteBuffer direct = java.nio.ByteBuffer.allocateDirect(png.length); direct.put(png); direct.flip();
+        ok("direct ByteBuffer works", java.util.Arrays.equals(EmoteLogic.bytes(direct), png) && direct.remaining() == png.length);
+        byte[] copy = EmoteLogic.bytes(png); copy[0] = 0;
+        ok("byte[] copied (source not changed)", png[0] == (byte) 0x89);
+        ok("unknown type -> null", EmoteLogic.bytes("x") == null && EmoteLogic.bytes(null) == null);
+        ok("seconds 40 -> 2 s, 50 -> 2,5 s, 0 -> empty", EmoteLogic.seconds(40).equals("2 s") && EmoteLogic.seconds(50).equals("2,5 s") && EmoteLogic.seconds(0).isEmpty());
+        ok("length uses stopTick when set, else endTick", EmoteLogic.length(60, 80) == 80 && EmoteLogic.length(60, 0) == 60 && EmoteLogic.length(-1, -1) == 0);
+        ok("loop span only when looping", EmoteLogic.loopSpan(true, 20, 60) == 40 && EmoteLogic.loopSpan(false, 20, 60) == 0 && EmoteLogic.loopSpan(true, 70, 60) == 0);
+        ok("format key", EmoteLogic.formatKey("JSON_EMOTECRAFT").equals("json_emotecraft") && EmoteLogic.formatKey(null).equals("unknown"));
+        ok("icon id", EmoteLogic.iconId("abc").equals("ec:abc") && EmoteLogic.iconId(" ").isEmpty() && EmoteLogic.isRef(EmoteLogic.iconId("abc")));
         System.out.println(fails == 0 ? "ALL OK " + n + "/" + n : fails + " FAILED of " + n);
         if (fails > 0) System.exit(1);
     }

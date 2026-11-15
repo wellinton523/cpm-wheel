@@ -25,6 +25,9 @@ public class EmoteApiCheck {
             ok("name text: " + api.name.getType().getSimpleName() + (api.textString != null ? " (Emotecraft Text.getString)" : ""),
                     "2.2".equals(api.flavor) ? api.textString != null && api.text.isAssignableFrom(api.name.getType()) : api.name.getType().getSimpleName().equals("Component"));
             ok("extraData (name fallback)", api.extra != null);
+            ok("1.8.2 details: author / description / fromInstance", api.author != null && api.description != null && api.fromInstance != null);
+            ok("1.8.2 details: begin / end / stop / loop / returnTo / nsfw / format", api.beginTick != null && api.endTick != null && api.stopTick != null && api.infinite != null
+                    && api.returnTick != null && api.nsfw != null && api.format != null);
         }
         System.out.println(fails == 0 ? "ALL OK " + n + "/" + n : fails + " FAILED of " + n);
         if (fails > 0) System.exit(1);

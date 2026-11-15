@@ -294,7 +294,7 @@ public class WheelScreen extends Screen {
                 if (s.favorite) g.drawString(font, "\u2605", (int) tx + isz / 2 - 2, (int) ty - isz / 2 - 4, 0xFFD23B, false);
             } else {
                 int textY = (int) ty - 4;
-                if (s.showIcon(cfg) && Icons.has(s.icon)) { int is2 = Math.min(isz, (int) ((ro - r0) * 0.6f)); Icons.draw(g, s.icon, (int) tx, (int) ty - 2 - is2 / 2, is2); textY = (int) ty + is2 / 2 - 4; }
+                if (s.showIcon(cfg) && Icons.has(s.iconKey())) { int is2 = Math.min(isz, (int) ((ro - r0) * 0.6f)); Icons.draw(g, s.iconKey(), (int) tx, (int) ty - 2 - is2 / 2, is2); textY = (int) ty + is2 / 2 - 4; }
                 String label = s.empty() ? "\u2014" : (s.isFolder() ? "\u25B8 " : "") + s.display();
                 label = Style.fit(cfg, font, label, (int) (R * 0.75f));
                 Style.text(g, cfg, font, label, (int) tx, textY, tcol);
@@ -320,7 +320,7 @@ public class WheelScreen extends Screen {
             boolean rh = i == hoveredRing;
             WheelConfig.Slot rs = ring.get(i);
             Draw.sector(g, rx, ry, 0, ringIr * (rh ? 1.15f : 1f), 0, Math.PI * 2, Draw.argb(rh ? accent : 0x000000, Math.round((rh ? 120 : 90) * alpha)));
-            if (Icons.has(rs.icon)) Icons.draw(g, rs.icon, (int) rx, (int) ry, Math.max(6, (int) (ringIr * 1.5f)));
+            if (Icons.has(rs.iconKey())) Icons.draw(g, rs.iconKey(), (int) rx, (int) ry, Math.max(6, (int) (ringIr * 1.5f)));
             else Draw.sector(g, rx, ry, 0, ringIr * 0.35f, 0, Math.PI * 2, Draw.argb(rs.color, Math.round(230 * alpha))); // no letter glyph inside the center
             if (rs.favorite) Draw.sector(g, rx + ringIr * 0.7f, ry - ringIr * 0.7f, 0, 1.6f, 0, Math.PI * 2, 0xFFFFD23B);
         }
@@ -331,22 +331,22 @@ public class WheelScreen extends Screen {
         int cis = Math.max(8, Math.round(Math.min(rc * 1.5f, 28 * cfg.centerIconSize / 100f)));
         if (cm.equals("player") && minecraft.player != null && alpha > 0.5f) {
             renderPlayer(g, cx, cy, rc * k, mx, my);
-            if (cs != null && !cs.empty() && Icons.has(cs.icon)) { // small badge, real icons only (never a letter glyph)
+            if (cs != null && !cs.empty() && Icons.has(cs.iconKey())) { // small badge, real icons only (never a letter glyph)
                 int bs = Math.min(cis, (int) (r0 * 0.5f));
                 float bx = cx + r0 * 0.62f, by = cy - r0 * 0.62f;
                 Draw.sector(g, bx, by, 0, bs * 0.7f, 0, Math.PI * 2, 0xE0060C14);
-                Icons.draw(g, cs.icon, (int) bx, (int) by, bs);
+                Icons.draw(g, cs.iconKey(), (int) bx, (int) by, bs);
             }
             if (!noText) {
                 Style.text(g, cfg, font, Style.fit(cfg, font, center, (int) (R * 2)), (int) cx, (int) (cy + R + 12), accent);
                 if (!path.isEmpty()) g.drawCenteredString(font, Component.translatable("cpmwheel.back"), (int) cx, (int) (cy + R + 24), 0x7FA8B8);
             }
         } else if (noText) {
-            if (cm.equals("icon") && cs != null && !cs.empty() && Icons.has(cs.icon)) Icons.draw(g, cs.icon, (int) cx, (int) cy, cis);
+            if (cm.equals("icon") && cs != null && !cs.empty() && Icons.has(cs.iconKey())) Icons.draw(g, cs.iconKey(), (int) cx, (int) cy, cis);
         } else {
-            WheelConfig.Slot is = cs != null && Icons.has(cs.icon) ? cs : null;
+            WheelConfig.Slot is = cs != null && Icons.has(cs.iconKey()) ? cs : null;
             boolean showIcon = cm.equals("icon") && is != null;
-            if (showIcon) Icons.draw(g, is.icon, (int) cx, (int) cy - 10 - cis / 2, (int) (cis * k));
+            if (showIcon) Icons.draw(g, is.iconKey(), (int) cx, (int) cy - 10 - cis / 2, (int) (cis * k));
             Style.text(g, cfg, font, Style.fit(cfg, font, center, (int) (rc * 1.7f)), (int) cx, (int) cy - 8 + (showIcon ? 0 : 4), accent);
             if (!ringOn || !showIcon) g.drawCenteredString(font, path.isEmpty() ? (page + 1) + "/" + pages.size() : "\u2190", (int) cx, (int) cy + 8, 0x7FA8B8);
         }

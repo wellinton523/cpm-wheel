@@ -95,4 +95,36 @@ public final class EmoteLogic {
 
     public static String action(String a) { for (String s : ACTIONS) if (s.equals(a)) return s; return "toggle"; }
     public static String l2dMode(String a) { for (String s : L2D_MODES) if (s.equals(a)) return s; return "none"; }
+
+    // ---- 1.8.2 emote icon and details ----
+    /** PNG signature check (so random bytes never reach the image decoder) */
+    public static boolean isPng(byte[] b) {
+        return b != null && b.length > 8 && (b[0] & 0xFF) == 0x89 && b[1] == 'P' && b[2] == 'N' && b[3] == 'G' && b[4] == 0x0D && b[5] == 0x0A && b[6] == 0x1A && b[7] == 0x0A;
+    }
+    /** Emotecraft keeps the icon as a ByteBuffer ("iconData"); never moves the original buffer's position. byte[] accepted too. */
+    public static byte[] bytes(Object o) {
+        if (o instanceof byte[] b) return b.clone();
+        if (o instanceof java.nio.ByteBuffer bb) {
+            java.nio.ByteBuffer d = bb.duplicate();
+            d.rewind();
+            byte[] out = new byte[d.remaining()];
+            d.get(out);
+            return out;
+        }
+        return null;
+    }
+    /** ticks -> "2,5 s" (20 ticks = 1 s); negative / zero -> "" */
+    public static String seconds(int ticks) {
+        if (ticks <= 0) return "";
+        float s = ticks / 20f;
+        return (s == Math.round(s) ? Integer.toString(Math.round(s)) : String.format(Locale.ROOT, "%.1f", s).replace('.', ',')) + " s";
+    }
+    /** emote length in ticks: stopTick when set (the real end), else endTick */
+    public static int length(int endTick, int stopTick) { return stopTick > 0 ? stopTick : Math.max(0, endTick); }
+    /** loop span (from returnToTick back to endTick) when looping, else 0 */
+    public static int loopSpan(boolean infinite, int returnTick, int endTick) { return infinite && endTick > returnTick && returnTick >= 0 ? endTick - returnTick : 0; }
+    /** "JSON_EMOTECRAFT" -> "json emotecraft" style label key part */
+    public static String formatKey(String f) { return f == null || f.isBlank() ? "unknown" : f.trim().toLowerCase(Locale.ROOT); }
+    /** wheel button icon id: "ec:<uuid>" (Icons draws the emote icon or the generic one) */
+    public static String iconId(String uuid) { return uuid == null || uuid.isBlank() ? "" : PREFIX + uuid.trim(); }
 }

@@ -80,6 +80,13 @@ public class WheelConfig {
         /** 1.8.1 "Emote do Emotecraft": plays / stops an Emotecraft emote (ecId = emote UUID, ecName = its name, ecAction toggle | play | stop) */
         public String ecId = "", ecName = "", ecAction = "toggle";
         public boolean isEc() { return "ec".equals(mode); }
+        /** 1.8.2: Emotecraft buttons show the emote's icon (or the generic one) unless an icon is set or this is off */
+        public boolean ecIcon = true;
+        /** icon actually drawn: the set icon, else the Emotecraft emote icon for Emotecraft buttons */
+        public String iconKey() {
+            if ((icon == null || icon.isBlank()) && isEc() && ecIcon) return "stop".equals(ecAction) || ecId == null || ecId.isBlank() ? "ec:-" : EmoteLogic.iconId(ecId);
+            return icon;
+        }
         public List<Rule> ruleList() {
             List<Rule> l = new ArrayList<>();
             if (rules != null) for (Rule r : rules) if (r != null) l.add(r);

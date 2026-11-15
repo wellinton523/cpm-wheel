@@ -1,6 +1,7 @@
 package com.welli.cpmwheel;
 
 import java.util.ArrayList;
+import java.lang.reflect.Field;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
@@ -23,7 +24,10 @@ import net.minecraft.client.Minecraft;
 public final class EmoteBridge {
     private EmoteBridge() {}
 
-    public record Emote(UUID id, String name, Object anim) {}
+    public record Emote(UUID id, String name, Object anim, Object holder) {}
+    /** 1.8.2 details for the picker (-1 / "" when unknown) */
+    public record Info(String name, String author, String description, int lengthTicks, boolean loop, int loopTicks,
+                       boolean nsfw, String format, boolean song, boolean fromServer, boolean hasIcon) {}
 
     private static boolean tried = false, present = false, failed = false;
     private static EmoteApi A;
@@ -78,11 +82,14 @@ public final class EmoteBridge {
                 if (n.isBlank()) n = extraName(a);
                 UUID id = (UUID) A.holderUuid.invoke(h);
                 if (n.isBlank()) n = String.valueOf(id).substring(0, 8);
-                out.add(new Emote(id, n, a));
+                out.add(new Emote(id, n, a, h));
             }
             out.sort((x, y) -> x.name().compareToIgnoreCase(y.name()));
             cache = List.copyOf(out);
-        } catch (Throwable t) { fail(t); cache = List.of(); }
+            java.util.Set<String> ids = new java.util.HashSet<>();
+            for (Emote e : cache) ids.add(e.id().toString());
+            EmoteIcons.retain(ids); // 1.8.2: free icons of emotes that are gone
+        } catch (Throwable t) { fail(t); cache = List.of(); EmoteIcons.clear(); }
         return cache;
     }
 
@@ -111,6 +118,42 @@ public final class EmoteBridge {
             Object n = m instanceof Map<?, ?> mm ? mm.get("name") : null;
             return n == null ? "" : EmoteLogic.clean(String.valueOf(n));
         } catch (Throwable t) { return ""; }
+    }
+
+    // ---- 1.8.2 icon + details ----
+    private static Map<?, ?> extra(Object anim) {
+        try { Object m = anim == null || A.extra == null ? null : A.extra.get(anim); return m instanceof Map<?, ?> mm ? mm : null; } catch (Throwable t) { return null; }
+    }
+    /** PNG bytes of the emote icon (KeyframeAnimation.extraData "iconData"), null when it has none */
+    public static byte[] iconBytes(String uuid) {
+        if (!present() || uuid == null) return null;
+        try {
+            Object l = A.list.get(null);
+            Object h = l instanceof Map<?, ?> m ? m.get(UUID.fromString(uuid)) : null;
+            if (h == null) return null;
+            Map<?, ?> x = extra(A.emote.get(h));
+            byte[] b = x == null ? null : EmoteLogic.bytes(x.get("iconData"));
+            return EmoteLogic.isPng(b) ? b : null;
+        } catch (IllegalArgumentException e) { return null; } // not a UUID
+        catch (Throwable t) { fail(t); return null; }
+    }
+    private static int i(Field f, Object o) { try { return f == null || o == null ? -1 : f.getInt(o); } catch (Throwable t) { return -1; } }
+    private static boolean b(Field f, Object o) { try { return f != null && o != null && f.getBoolean(o); } catch (Throwable t) { return false; } }
+    private static Object o(Field f, Object o) { try { return f == null || o == null ? null : f.get(o); } catch (Throwable t) { return null; } }
+
+    public static Info info(Emote e) {
+        if (e == null || !present()) return null;
+        Object a = e.anim(), h = e.holder();
+        Map<?, ?> x = extra(a);
+        String au = text(o(A.author, h)), de = text(o(A.description, h));
+        if (au.isBlank() && x != null && x.get("author") != null) au = EmoteLogic.clean(String.valueOf(x.get("author")));
+        if (de.isBlank() && x != null && x.get("description") != null) de = EmoteLogic.clean(String.valueOf(x.get("description")));
+        int end = i(A.endTick, a), stop = i(A.stopTick, a), ret = i(A.returnTick, a);
+        boolean loop = b(A.infinite, a);
+        Object fmt = o(A.format, a);
+        return new Info(e.name(), au, de, EmoteLogic.length(end, stop), loop, EmoteLogic.loopSpan(loop, ret, end), b(A.nsfw, a),
+                fmt == null ? "" : String.valueOf(fmt), x != null && x.get("song") != null, o(A.fromInstance, h) != null,
+                x != null && EmoteLogic.isPng(EmoteLogic.bytes(x.get("iconData"))));
     }
 
     // ---- local player state (cached per 40 ms) ----

@@ -12,8 +12,13 @@ public final class EmoteApi {
     public Class<?> playerEnt, text;
     public Method isPlaying, getEmote, getData, play, stop, kaUuid, holderUuid, textString;
     public Field list, name, emote, extra;
+    /** 1.8.2 optional details (null when a version lacks them): holder author / description / fromInstance (server emote),
+     *  KeyframeAnimation beginTick / endTick / stopTick / isInfinite / returnToTick / nsfw / animationFormat */
+    public Field author, description, fromInstance, beginTick, endTick, stopTick, infinite, returnTick, nsfw, format;
     /** "2.4" (ClientEmoteAPI.stopEmote) or "2.2" (ClientEmotePlay.clientStopLocalEmote) */
     public String flavor = "";
+
+    private static Field opt(Class<?> k, String n) { try { return k.getField(n); } catch (Throwable t) { return null; } }
 
     private static Class<?> c(ClassLoader cl, String n) throws ClassNotFoundException { return Class.forName(n, false, cl); }
 
@@ -40,6 +45,9 @@ public final class EmoteApi {
         a.name = holder.getField("name");
         a.emote = holder.getField("emote");
         a.holderUuid = holder.getMethod("getUuid");
+        a.author = opt(holder, "author"); a.description = opt(holder, "description"); a.fromInstance = opt(holder, "fromInstance");
+        a.beginTick = opt(ka, "beginTick"); a.endTick = opt(ka, "endTick"); a.stopTick = opt(ka, "stopTick"); a.infinite = opt(ka, "isInfinite");
+        a.returnTick = opt(ka, "returnToTick"); a.nsfw = opt(ka, "nsfw"); a.format = opt(ka, "animationFormat");
         try { a.text = c(cl, "io.github.kosmx.emotes.executor.dataTypes.Text"); a.textString = a.text.getMethod("getString"); } catch (Throwable ignored) {} // 2.2.x only
         return a;
     }

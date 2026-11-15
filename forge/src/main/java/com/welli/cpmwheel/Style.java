@@ -198,7 +198,7 @@ public final class Style {
     /** icon if present, otherwise a first-letter glyph badge */
     public static void icon(GuiGraphics g, WheelConfig c, Font f, WheelConfig.Slot s, int x, int y, int size, int color, float alpha) {
         if (s == null || size < 4) return;
-        if (Icons.has(s.icon)) { Icons.draw(g, s.icon, x, y, size); return; }
+        if (Icons.has(s.iconKey())) { Icons.draw(g, s.iconKey(), x, y, size); return; }
         if (s.empty()) return;
         String d = WheelConfig.RESET.equals(s.anim) ? "\u21BA" : s.display();
         String ch = d.isBlank() ? "?" : new String(Character.toChars(d.codePointAt(0))).toUpperCase();

@@ -17,7 +17,11 @@ public final class Hud {
     private static final int MAX_DEPTH = 16, ROW = 10, INDENT = 5;
 
     /** one text row: header (group name) or item (label: value) */
-    private record Row(int depth, boolean header, String label, String value, int color) {}
+    private record Row(int depth, boolean header, String label, String value, int color, String icon) {
+        Row(int depth, boolean header, String label, String value, int color) { this(depth, header, label, value, color, ""); }
+    }
+    /** 1.8.2: Emotecraft buttons show their emote icon in the HUD */
+    private static String hudIcon(WheelConfig.Slot s) { return s.isEc() ? s.iconKey() : ""; }
     /** vertical bar of a group, covering rows [from, to] */
     private record Bar(int depth, int from, int to, int color) {}
 
@@ -86,7 +90,7 @@ public final class Hud {
                 visiting.remove(s);
             } else if (s.isGroup() || s.isCond() || s.isEc() || seen.add(s.anim)) {
                 String[] it = item(cfg, s);
-                if (it != null) { outRows.add(new Row(depth + 1, false, s.display(), it[0], Integer.parseInt(it[1]))); any = true; }
+                if (it != null) { outRows.add(new Row(depth + 1, false, s.display(), it[0], Integer.parseInt(it[1]), hudIcon(s))); any = true; }
             }
         }
         if (!any && !cfg.hudShowEmptyGroups) { // hide empty group entirely
@@ -109,14 +113,14 @@ public final class Hud {
             for (WheelConfig.Slot s : cfg.allSlots()) {
                 if (s.empty() || s.isFolder() || (!s.isGroup() && !s.isCond() && !s.isEc() && !seen.add(s.anim))) continue;
                 String[] it = item(cfg, s);
-                if (it != null) r.add(new Row(0, false, s.display(), it[0], Integer.parseInt(it[1])));
+                if (it != null) r.add(new Row(0, false, s.display(), it[0], Integer.parseInt(it[1]), hudIcon(s)));
             }
             if (!r.isEmpty()) b.add(new Bar(-1, 0, r.size() - 1, 0x2EE6FF));
         }
         int w = 0, md = 0;
         for (Row row : r) {
             int x = textX(row.depth);
-            w = Math.max(w, x + font.width(row.header ? row.label : row.label + ": " + row.value) + 6);
+            w = Math.max(w, x + font.width(row.header ? row.label : row.label + ": " + row.value) + 6 + (row.icon.isEmpty() ? 0 : 10));
             md = Math.max(md, row.depth);
         }
         rows = r; bars = b; layoutW = w; maxDepth = md;
@@ -213,8 +217,10 @@ public final class Hud {
             if (r.header) g.drawString(font, r.label, tx - 2, ly, 0xFF000000 | r.color);
             else {
                 g.fill(tx - 5, ly + 2, tx - 2, ly + 6, 0xFF000000 | r.color);
-                g.drawString(font, r.label + ": ", tx, ly, 0xC8E8F0);
-                g.drawString(font, r.value, tx + font.width(r.label + ": "), ly, 0xFFFFFF);
+                int ix = 0;
+                if (!r.icon.isEmpty()) { Icons.draw(g, r.icon, tx + 4, ly + 3, 9); ix = 10; } // 1.8.2 emote icon
+                g.drawString(font, r.label + ": ", tx + ix, ly, 0xC8E8F0);
+                g.drawString(font, r.value, tx + ix + font.width(r.label + ": "), ly, 0xFFFFFF);
             }
             ly += ROW;
         }

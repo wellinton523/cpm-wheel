@@ -49,6 +49,7 @@ public final class Icons {
     }
 
     public static void reload() {
+        EmoteIcons.clear(); // 1.8.2
         for (Tex t : CACHE.values()) release(t);
         CACHE.clear(); FAILED.clear(); files = null;
     }
@@ -82,7 +83,7 @@ public final class Icons {
     }
 
     public static ItemStack item(String icon) {
-        if (icon == null || icon.isBlank() || icon.startsWith(FILE)) return ItemStack.EMPTY;
+        if (icon == null || icon.isBlank() || icon.startsWith(FILE) || EmoteLogic.isRef(icon)) return ItemStack.EMPTY;
         ResourceLocation rl = ResourceLocation.tryParse(icon.contains(":") ? icon : "minecraft:" + icon);
         if (rl == null) return ItemStack.EMPTY;
         return BuiltInRegistries.ITEM.getOptional(rl).map(ItemStack::new).orElse(ItemStack.EMPTY);
@@ -91,12 +92,14 @@ public final class Icons {
     public static boolean has(String icon) {
         if (icon == null || icon.isBlank()) return false;
         if (icon.startsWith(FILE)) return custom(icon.substring(FILE.length())) != null;
+        if (EmoteLogic.isRef(icon)) return true; // 1.8.2 Emotecraft emote icon (own or generic)
         return !item(icon).isEmpty();
     }
 
     /** Draws icon centered at (cx, cy) fitting in a size x size box. */
     public static void draw(GuiGraphics g, String icon, int cx, int cy, int size) {
         if (icon == null || icon.isBlank()) return;
+        if (EmoteLogic.isRef(icon)) { EmoteIcons.draw(g, EmoteLogic.refName(icon), cx, cy, size); return; } // 1.8.2
         if (icon.startsWith(FILE)) {
             Tex t = custom(icon.substring(FILE.length()));
             if (t == null) return;
