@@ -16,14 +16,14 @@ public class ArmAdjustScreen extends Screen {
     public ArmAdjustScreen(Screen parent, WheelConfig cfg) { super(Component.translatable("cpmwheel.arm.title")); this.parent = parent; this.cfg = cfg; }
 
     private String key() { return off ? "off" : "main"; }
-    private int[] cur() { return cfg.haArm.computeIfAbsent(key(), k -> new int[7]); }
+    private int[] cur() { return cfg.haArm.computeIfAbsent(key(), WheelConfig::defArm); }
 
     @Override
     protected void init() {
         int x = 8, y = 26;
         addRenderableWidget(Button.builder(Component.translatable(off ? "cpmwheel.arm.off" : "cpmwheel.arm.main"), b -> { off = !off; rebuildWidgets(); }).bounds(x, y, 150, 20).build());
         y += 24;
-        int[] v = cfg.haArm.getOrDefault(key(), new int[7]);
+        int[] v = cfg.arm(key());
         for (int i = 0; i < 7; i++) {
             final int idx = i, min = MIN[i], max = MAX[i], step = STEP[i];
             String k = "cpmwheel.arm." + KEYS[i];

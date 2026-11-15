@@ -34,6 +34,11 @@ public class CpmWheel {
     public static final KeyMapping KEY_HUD_EDIT = new KeyMapping("key.cpmwheel.hudedit",
             InputConstants.Type.KEYSYM, InputConstants.UNKNOWN.getValue(), "key.categories.cpmwheel");
 
+    /** 1.8.0 "Teclas de emotes": unbound by default, the animation of each is chosen in Settings */
+    public static final int EMOTE_KEYS = 8;
+    public static final KeyMapping[] KEY_EMOTE = new KeyMapping[EMOTE_KEYS];
+    static { for (int i = 0; i < EMOTE_KEYS; i++) KEY_EMOTE[i] = new KeyMapping("key.cpmwheel.emote" + (i + 1), InputConstants.Type.KEYSYM, InputConstants.UNKNOWN.getValue(), "key.categories.cpmwheel"); }
+
     public CpmWheel() {
         if (FMLEnvironment.dist != Dist.CLIENT) return;
         var bus = FMLJavaModLoadingContext.get().getModEventBus();
@@ -56,6 +61,7 @@ public class CpmWheel {
         e.register(KEY_EDIT);
         e.register(KEY_HUD);
         e.register(KEY_HUD_EDIT);
+        for (KeyMapping k : KEY_EMOTE) e.register(k);
     }
 
     private void imc(InterModEnqueueEvent e) {
@@ -84,6 +90,11 @@ public class CpmWheel {
         }
         while (KEY_EDIT.consumeClick()) {
             if (mc.screen == null && mc.player != null) mc.setScreen(new EditScreen(null));
+        }
+        for (int i = 0; i < EMOTE_KEYS; i++) while (KEY_EMOTE[i].consumeClick()) {
+            if (mc.screen != null || mc.player == null) continue;
+            WheelConfig c = WheelConfig.get();
+            if (c.emoteKeysOn && i < c.emoteKeys.size()) Actions.emote(c, c.emoteKeys.get(i));
         }
     }
 }

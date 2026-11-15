@@ -259,6 +259,20 @@ public class WheelConfig {
         public Page(String n, int size) { name = n; for (int i = 0; i < size; i++) slots.add(new Slot()); }
     }
 
+    /** 1.8.0 default item positions per type {x,y,z,scale,rx,ry,rz} (the author's tuning); types not listed default to 0 */
+    static final java.util.Map<String, int[]> DEF_ADJ = java.util.Map.of(
+            "shield", new int[]{6, -1, -7, 0, 0, 30, 35}, "sword", new int[]{-1, 6, 1, 0, 30, 60, 30}, "other", new int[]{2, -3, 4, 0, 10, 35, 35},
+            "trident", new int[]{-1, -2, 14, 0, 65, -140, -40}, "crossbow", new int[]{0, 0, 0, 0, 0, 0, 0}, "bow", new int[]{-5, 2, 0, 0, 20, 20, 0},
+            "tool", new int[]{0, 0, 0, 0, 15, 35, 5}, "axe", new int[]{0, 0, 0, 0, 15, 35, 5}, "lantern", new int[]{12, -9, 0, 40, 0, 0, 0},
+            "flatblock", new int[]{2, -8, 6, 0, 0, 0, 0});
+    /** 1.8.0 default arm adjust per hand */
+    static final java.util.Map<String, int[]> DEF_ARM = java.util.Map.of("main", new int[]{30, 0, 0, 0, 0, 0, 0}, "off", new int[]{30, 0, 0, 0, 0, 0, 0});
+    public static int[] defAdj(String cat) { int[] v = DEF_ADJ.get(cat); return v == null ? new int[7] : v.clone(); }
+    public static int[] defArm(String hand) { int[] v = DEF_ARM.get(hand); return v == null ? new int[7] : v.clone(); }
+    /** value in use for a type / hand: own entry, else the default */
+    public int[] adj(String cat) { int[] v = haAdj.get(cat); return v != null && v.length == 7 ? v : defAdj(cat); }
+    public int[] arm(String hand) { int[] v = haArm.get(hand); return v != null && v.length == 7 ? v : defArm(hand); }
+
     public boolean holdToOpen = true;
     public boolean animations = true;
     public boolean livePreview = true;
@@ -268,7 +282,7 @@ public class WheelConfig {
     public String centerMode = "player";
     /** center size in percent (50-200) */
     public int centerSize = 100;
-    public int configVersion = 23;
+    public int configVersion = 24;
     /** 1.6.0 global switches: extra trigger conditions, timed transitions, custom sounds (per-button / per-rule sounds) */
     public boolean trigCondsOn = true, trigTransOn = true, customSounds = true;
     /** 1.7.0 "Física Live2D": chains of CPM value layers driven by spring physics */
@@ -276,6 +290,18 @@ public class WheelConfig {
     public List<Live2dMath.Chain> l2dChains = new ArrayList<>();
     /** 1.7.1: layer -> how links sharing it combine ("sum" / "avg" / "max"); missing = sum */
     public java.util.Map<String, String> l2dModes = new java.util.HashMap<>();
+    /** 1.8.0 Física Live2D extras, all off until turned on: wind, damage / landing impulses, look-at, voice (Simple Voice Chat),
+     *  "Camada/animação (movimento)" input, breathing / blinking generators */
+    public boolean l2dWindOn = false, l2dImpactOn = false, l2dLookOn = false, l2dVoiceOn = false, l2dLayerOn = false, l2dGenOn = false;
+    public int l2dWindPct = 100, l2dImpactPct = 100, l2dLookRadius = 8, l2dVoicePct = 100;
+    public boolean l2dLookPlayers = true;
+    public List<Live2dMath.Gen> l2dGens = new ArrayList<>();
+    /** 1.8.0 "Teclas de emotes": animation per key slot (key.cpmwheel.emote1..8, set in Controls); off by default */
+    public boolean emoteKeysOn = false;
+    public List<String> emoteKeys = new ArrayList<>();
+    /** 1.8.0 "Encadear animações": when an animation ends / starts, play another; off by default */
+    public boolean chainTrigOn = false;
+    public List<ChainLogic.Rule> chainRules = new ArrayList<>();
     private static final String LEGACY_DESIGN = "signalis";
     /** HUD grouped by wheel/folder with nested bars; false = flat list */
     public boolean hudGrouped = true;
@@ -349,22 +375,79 @@ public class WheelConfig {
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
     private static WheelConfig current;
     private static String currentKey;
+    /** 1.8.0: the file this object belongs to (a screen still holding an old object after a profile switch saves to its own file) */
+    private transient String myKey;
 
     private static Path dir() { return FMLPaths.CONFIGDIR.get().resolve("cpmwheel"); }
 
     private static Path file(String key) {
+        if (ProfileLogic.isProfile(key)) return dir().resolve("profiles").resolve(ProfileLogic.clean(key.substring(1)) + ".json");
         return dir().resolve(key.replaceAll("[^A-Za-z0-9._-]", "_") + ".json");
     }
 
+    // ---------- 1.8.0 "Perfis automáticos por modelo" (config/cpmwheel/_profiles.json, shared by every model) ----------
+    public static class Profiles {
+        public boolean autoOn = false;
+        public boolean notify = true;
+        /** CPM model key -> profile name (config/cpmwheel/profiles/<name>.json) */
+        public java.util.Map<String, String> links = new java.util.HashMap<>();
+    }
+    private static Profiles profiles;
+    public static Profiles profiles() {
+        if (profiles == null) {
+            try {
+                Path f = dir().resolve("_profiles.json");
+                if (Files.exists(f)) profiles = GSON.fromJson(Files.readString(f, StandardCharsets.UTF_8), Profiles.class);
+            } catch (Exception e) { CpmWheel.LOG.warn("[CPM Wheel] profiles load failed", e); }
+            if (profiles == null) profiles = new Profiles();
+            if (profiles.links == null) profiles.links = new java.util.HashMap<>();
+        }
+        return profiles;
+    }
+    public static void saveProfiles() {
+        try {
+            Files.createDirectories(dir());
+            Files.writeString(dir().resolve("_profiles.json"), GSON.toJson(profiles()), StandardCharsets.UTF_8);
+        } catch (Exception e) { CpmWheel.LOG.warn("[CPM Wheel] profiles save failed", e); }
+    }
+    private static String currentModel = "default";
+    public static String currentModel() { return currentModel; }
+    /** after linking / unlinking: reload on the next get() */
+    public static void reloadProfile() { if (current != null) current.save(); current = null; }
+    public static List<String> profileNames() {
+        List<String> l = new ArrayList<>();
+        try (var st = Files.list(dir().resolve("profiles"))) {
+            st.forEach(f -> { String n = f.getFileName().toString(); if (n.endsWith(".json")) l.add(n.substring(0, n.length() - 5)); });
+        } catch (Exception ignored) {}
+        Collections.sort(l);
+        return l;
+    }
+
     public static WheelConfig get() {
-        String key = CpmBridge.modelKey();
-        if (current == null || !key.equals(currentKey)) { current = load(key); currentKey = key; }
+        String model = CpmBridge.modelKey();
+        Profiles pr = profiles();
+        String key = ProfileLogic.resolve(pr.autoOn, pr.links, model);
+        if (current == null || !key.equals(currentKey)) {
+            boolean switching = current != null && currentKey != null;
+            current = load(key, model); current.myKey = key; currentKey = key; currentModel = model;
+            if (switching && pr.autoOn && pr.notify) {
+                try {
+                    var mc = net.minecraft.client.Minecraft.getInstance();
+                    if (mc.player != null) mc.player.displayClientMessage(net.minecraft.network.chat.Component.translatable("cpmwheel.prof.switched",
+                            ProfileLogic.isProfile(key) ? key.substring(1) : net.minecraft.network.chat.Component.translatable("cpmwheel.prof.own").getString()), true);
+                } catch (Throwable ignored) {}
+            }
+            try { Live2d.reset(); Actions.invalidate(); } catch (Throwable ignored) {}
+        }
+        currentModel = model;
         return current;
     }
 
-    private static WheelConfig load(String key) {
+    private static WheelConfig load(String key) { return load(key, key); }
+    private static WheelConfig load(String key, String model) {
         try {
             Path f = file(key);
+            if (!Files.exists(f) && ProfileLogic.isProfile(key)) f = file(model);   // a new profile starts from this model's own settings
             if (!Files.exists(f) && !key.equals("default")) f = file("default");
             if (Files.exists(f)) {
                 WheelConfig c = GSON.fromJson(Files.readString(f, StandardCharsets.UTF_8), WheelConfig.class);
@@ -403,6 +486,10 @@ public class WheelConfig {
                         if (c.l2dChains != null) for (Live2dMath.Chain ch : c.l2dChains) if (ch != null) { if (ch.off == null) ch.off = new ArrayList<>(); if (ch.fadeMs <= 0) ch.fadeMs = 300; } }
                     if (c.configVersion < 23) { c.configVersion = 23; // 1.7.3: velocity inputs hold the link displaced (75 %), angles unchanged
                         if (c.l2dChains != null) for (Live2dMath.Chain ch : c.l2dChains) if (ch != null && ch.links != null) for (Live2dMath.Link l : ch.links) Live2dMath.migrateHold(l); }
+                    if (c.configVersion < 24) { c.configVersion = 24; // 1.8.0: new extras off; item / arm positions still on the old defaults (0) use the new ones
+                        c.l2dWindOn = c.l2dImpactOn = c.l2dLookOn = c.l2dVoiceOn = c.l2dLayerOn = c.l2dGenOn = false; c.emoteKeysOn = false; c.chainTrigOn = false;
+                        if (c.haAdj != null) c.haAdj.entrySet().removeIf(e -> DEF_ADJ.containsKey(e.getKey()) && allZero(e.getValue()));
+                        if (c.haArm != null) c.haArm.entrySet().removeIf(e -> DEF_ARM.containsKey(e.getKey()) && allZero(e.getValue())); }
                     c.fixup();
                     if (c.centerMode == null || c.centerMode.isBlank()) c.centerMode = "player";
                     if (c.hudCorner == null || c.hudCorner.isBlank()) c.hudCorner = "top_left";
@@ -452,6 +539,8 @@ public class WheelConfig {
         sp.vol = clamp(sp.vol, 0, 200); sp.pitch = clamp(sp.pitch <= 0 ? 100 : sp.pitch, 50, 200);
     }
 
+    static boolean allZero(int[] v) { if (v == null) return true; for (int x : v) if (x != 0) return false; return true; }
+
     void fixup() {
         if (LEGACY_DESIGN.equals(design)) design = "terminal"; // 1.4.0/1.4.1 id of the Terminal design
         for (Page pg : pages) { if (pg.slots == null) pg.slots = new ArrayList<>(); if (pg.color == 0) pg.color = 0x2EE6FF; }
@@ -468,6 +557,33 @@ public class WheelConfig {
         if (haItem == null) haItem = new java.util.HashMap<>();
         haItem.entrySet().removeIf(e -> e.getKey() == null || !(e.getKey().endsWith("|main") || e.getKey().endsWith("|off")) || e.getValue() == null || e.getValue().length != 7);
         if (hudPos == null) hudPos = new java.util.HashMap<>();
+        // 1.8.0
+        l2dWindPct = clamp(l2dWindPct, 0, 300); l2dImpactPct = clamp(l2dImpactPct, 0, 300); l2dVoicePct = clamp(l2dVoicePct, 0, 300);
+        l2dLookRadius = clamp(l2dLookRadius <= 0 ? 8 : l2dLookRadius, 2, 32);
+        if (l2dGens == null) l2dGens = new ArrayList<>();
+        l2dGens.removeIf(java.util.Objects::isNull);
+        while (l2dGens.size() > 8) l2dGens.remove(l2dGens.size() - 1);
+        for (Live2dMath.Gen g : l2dGens) {
+            if (g.id == null || g.id.isBlank()) g.id = newId("g");
+            if (g.name == null) g.name = ""; if (g.anim == null) g.anim = "";
+            if (!"blink".equals(g.kind)) g.kind = "breath";
+            g.periodMs = clamp(g.periodMs, 200, 30000); g.lo = clamp(g.lo, 0, 100); g.hi = clamp(g.hi, 0, 100);
+            g.rand = clamp(g.rand, 0, 100); g.pulseMs = clamp(g.pulseMs, 50, 2000);
+        }
+        if (emoteKeys == null) emoteKeys = new ArrayList<>();
+        emoteKeys.replaceAll(k -> k == null ? "" : k);
+        while (emoteKeys.size() < CpmWheel.EMOTE_KEYS) emoteKeys.add("");
+        while (emoteKeys.size() > CpmWheel.EMOTE_KEYS) emoteKeys.remove(emoteKeys.size() - 1);
+        if (chainRules == null) chainRules = new ArrayList<>();
+        chainRules.removeIf(java.util.Objects::isNull);
+        while (chainRules.size() > 32) chainRules.remove(chainRules.size() - 1);
+        for (ChainLogic.Rule r : chainRules) {
+            if (r.id == null || r.id.isBlank()) r.id = newId("t");
+            if (r.from == null) r.from = ""; if (r.to == null) r.to = "";
+            if (!"start".equals(r.when)) r.when = "end";
+            if (!"off".equals(r.op) && !"toggle".equals(r.op)) r.op = "on";
+            r.delayMs = clamp(r.delayMs, 0, 60000); r.value = clamp(r.value, -1, 255);
+        }
         hudPos.values().removeIf(java.util.Objects::isNull);
         if (!hudPos.containsKey("list")) hudPos.put("list", Hud.defaultPos("list", this));
         if (!hudPos.containsKey("toasts")) hudPos.put("toasts", Hud.defaultPos("toasts", this));
@@ -499,7 +615,10 @@ public class WheelConfig {
                 if (l.anim == null) l.anim = "";
                 Live2dMath.migrateLink(l);
                 l.inputs.removeIf(in -> in == null || !java.util.Arrays.asList(Live2dMath.INPUTS).contains(in.src));
-                for (Live2dMath.Input in : l.inputs) { in.weight = Math.max(0, Math.min(300, in.weight)); in.hold = Math.max(0, Math.min(100, in.hold)); }
+                for (Live2dMath.Input in : l.inputs) { in.weight = Math.max(0, Math.min(300, in.weight)); in.hold = Math.max(0, Math.min(100, in.hold));
+                    if (in.ref == null) in.ref = ""; if (!java.util.Arrays.asList(Live2dMath.REF_MODES).contains(in.refMode)) in.refMode = "rate";
+                    in.refHz10 = Math.max(1, Math.min(200, in.refHz10 <= 0 ? 40 : in.refHz10)); }
+                l.limLo = Math.max(-180, Math.min(180, l.limLo)); l.limHi = Math.max(-180, Math.min(180, l.limHi));
                 while (l.inputs.size() > 4) l.inputs.remove(l.inputs.size() - 1);
                 l.len = Math.max(10, Math.min(400, l.len)); l.weight = Math.max(10, Math.min(500, l.weight));
                 l.damp = Math.max(0, Math.min(100, l.damp)); l.gain = Math.max(0, Math.min(300, l.gain));
@@ -583,7 +702,7 @@ public class WheelConfig {
     static int clampI(int v, int a, int b) { return clamp(v, a, b); }
     private static int clamp(int v, int a, int b) { return Math.max(a, Math.min(b, v)); }
 
-    public String profileKey() { return currentKey == null ? "default" : currentKey; }
+    public String profileKey() { return myKey != null ? myKey : currentKey == null ? "default" : currentKey; }
 
     public void addRecent(String anim) {
         if (anim == null || anim.isBlank() || RESET.equals(anim)) return;
@@ -667,8 +786,8 @@ public class WheelConfig {
 
     public void save() {
         try {
-            Files.createDirectories(dir());
-            Path f = file(currentKey == null ? "default" : currentKey);
+            Path f = file(profileKey());
+            Files.createDirectories(f.getParent());
             Path tmp = f.resolveSibling(f.getFileName() + ".tmp");
             Files.writeString(tmp, GSON.toJson(this), StandardCharsets.UTF_8);
             Files.move(tmp, f, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);

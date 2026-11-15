@@ -21,7 +21,11 @@ public final class Live2dMath {
     private Live2dMath() {}
 
     /** input sources: angles in degrees, speeds as 10° per block/s; "prev" = the previous link's angle */
-    public static final String[] INPUTS = {"headYaw", "headPitch", "bodyYaw", "headRel", "walk", "fwd", "side", "vert", "prev"};
+    public static final String[] INPUTS = {"headYaw", "headPitch", "bodyYaw", "headRel", "walk", "fwd", "side", "vert",
+            // 1.8.0: falling speed, gravity / look (pitch), wind, damage / landing impulses, look-at, voice
+            "fall", "grav", "windF", "windS", "hit", "land", "lookYaw", "lookPitch", "voice", "layer", "prev"};
+    /** 1.8.0: sources whose sign flips when a chain is mirrored (left <-> right) */
+    public static final String[] MIRROR = {"headYaw", "bodyYaw", "headRel", "side", "windS", "lookYaw"};
     /** how links sharing one CPM layer are combined */
     public static final String[] MODES = {"sum", "avg", "max"};
 
@@ -32,6 +36,11 @@ public final class Live2dMath {
         public boolean invert = false;
         /** 1.7.3 "Tranco ↔ Mantido": 0 = only the swing on changes (old), 100 = the input holds the link displaced */
         public int hold = 0;
+        /** 1.8.0 source "layer" (Camada/animação em movimento): the CPM animation / value layer read, and how:
+         *  "rate" = how fast its value changes, "value" = its value, "osc" = while active, a push oscillating at refHz10/10 Hz */
+        public String ref = "";
+        public String refMode = "rate";
+        public int refHz10 = 40;
         public Input() {}
         public Input(String src, int weight, boolean invert) { this.src = src; this.weight = weight; this.invert = invert; this.hold = defaultHold(src); }
     }
@@ -53,6 +62,9 @@ public final class Live2dMath {
         /** 1.7.2 "Desativar quando" for this link only (the chain's list also applies) */
         public List<TriggerLogic.Cond> off = new ArrayList<>();
         public String offCombine = "or";
+        /** 1.8.0 soft angle limit (off by default): the output approaches [limLo, limHi] smoothly instead of passing it */
+        public boolean softLim = false;
+        public int limLo = -45, limHi = 45;
         public Link() {}
         public Link(String input, boolean lag) { inputs.add(new Input(input, 100, false)); this.lag = lag; }
         public Link add(String src, int weight, boolean invert) { inputs.add(new Input(src, weight, invert)); return this; }
@@ -71,8 +83,13 @@ public final class Live2dMath {
 
     /** 1.7.3: velocity inputs default to mostly sustained, angles (head / body) stay impulse-only like before */
     public static final int HOLD_SPEED = 75;
-    public static boolean isSpeed(String src) { return "walk".equals(src) || "fwd".equals(src) || "side".equals(src) || "vert".equals(src); }
-    public static int defaultHold(String src) { return isSpeed(src) ? HOLD_SPEED : 0; }
+    public static boolean isSpeed(String src) { return "walk".equals(src) || "fwd".equals(src) || "side".equals(src) || "vert".equals(src)
+            || "fall".equals(src) || "windF".equals(src) || "windS".equals(src); }
+    /** 1.8.0: gravity, look-at and voice keep their value (100 %); impulses are already one-shot (0 %) */
+    public static int defaultHold(String src) {
+        if ("grav".equals(src) || "lookYaw".equals(src) || "lookPitch".equals(src) || "voice".equals(src)) return 100;
+        return isSpeed(src) ? HOLD_SPEED : 0;
+    }
     /** config 22 -> 23: existing velocity inputs gain the sustained behaviour */
     public static void migrateHold(Link l) {
         if (l == null || l.inputs == null) return;
@@ -164,7 +181,7 @@ public final class Live2dMath {
         if (l.inputs == null) return 0;
         for (Input in : l.inputs) {
             if (in == null) continue;
-            float v = "prev".equals(in.src) ? prevA : src == null ? 0 : src.getOrDefault(in.src, 0f);
+            float v = "prev".equals(in.src) ? prevA : src == null ? 0 : src.getOrDefault(key(in), 0f);
             x += v * clamp(in.weight, 0, 300) / 100f * (in.invert ? -1 : 1);
         }
         return x;
@@ -176,7 +193,7 @@ public final class Live2dMath {
         if (l.inputs == null) return 0;
         for (Input in : l.inputs) {
             if (in == null || "prev".equals(in.src)) continue;
-            float v = src == null ? 0 : src.getOrDefault(in.src, 0f);
+            float v = src == null ? 0 : src.getOrDefault(key(in), 0f);
             x += v * clamp(in.weight, 0, 300) / 100f * (in.invert ? -1 : 1) * clamp(in.hold, 0, 100) / 100f;
         }
         return x;
@@ -195,7 +212,7 @@ public final class Live2dMath {
             Link p = links.get(i);
             float g = clamp(p.gain, 0, 300) / 100f;
             float x = drive(p, src, i == 0 ? 0 : st[i - 1].a) * g;
-            out[i] = stepLink(st[i], x, held(p, src) * g, p, dt);
+            out[i] = limit(p, stepLink(st[i], x, held(p, src) * g, p, dt));
         }
         return out;
     }
@@ -237,6 +254,228 @@ public final class Live2dMath {
         float d = raw - prevUnwrapped;
         d = (float) (d - 360.0 * Math.floor((d + 180.0) / 360.0));
         return prevUnwrapped + d;
+    }
+
+    // ---------- 1.8.0 soft limit ----------
+    /** identity inside [lo + k, hi − k]; beyond it approaches lo / hi exponentially (continuous, slope 1 at the knee) */
+    public static float softClamp(float x, float lo, float hi) {
+        if (Float.isNaN(x)) return (lo + hi) / 2;
+        if (lo > hi) { float t = lo; lo = hi; hi = t; }
+        float k = Math.min(10f, (hi - lo) / 4f);
+        if (k <= 0) return lo;
+        if (x > hi - k) return hi - k * (float) Math.exp(-(x - (hi - k)) / k);
+        if (x < lo + k) return lo + k * (float) Math.exp(-((lo + k) - x) / k);
+        return x;
+    }
+    public static float limit(Link l, float out) { return l != null && l.softLim ? softClamp(out, l.limLo, l.limHi) : out; }
+
+    // ---------- 1.8.0 one-shot impulses (damage, landing) ----------
+    public static final class Impulse { public float v; }
+    /** a new hit replaces a smaller one (no endless stacking) */
+    public static void kick(Impulse i, float peak) { if (peak > i.v) i.v = Math.min(120f, peak); }
+    /** returns the current value, then decays with time constant tau (s) */
+    public static float decay(Impulse i, float dt, float tau) {
+        float out = i.v;
+        i.v *= (float) Math.exp(-dt / Math.max(0.01f, tau));
+        if (i.v < 0.05f) i.v = 0;
+        return out;
+    }
+    /** damage in HP (half hearts) -> degrees */
+    public static float hitPeak(float damage) { return Math.min(90f, Math.max(0f, damage) * 8f); }
+    /** landing speed in blocks/s -> degrees (normal jumps ≈ 0) */
+    public static float landPeak(float fallSpeed) { return Math.min(90f, Math.max(0f, fallSpeed - 5f) * 6f); }
+
+    // ---------- 1.8.0 wind ----------
+    /** biome id -> wind factor (open / high places windy, forests / caves calm) */
+    public static float biomeWind(String id) {
+        if (id == null) return 1f;
+        String b = id.toLowerCase(java.util.Locale.ROOT);
+        if (b.contains("deep_dark") || b.contains("cave")) return 0.3f;
+        if (b.contains("peak") || b.contains("windswept") || b.contains("slope") || b.contains("mountain") || b.contains("stony_shore")) return 1.8f;
+        if (b.contains("ocean") || b.contains("beach") || b.contains("plains") || b.contains("savanna") || b.contains("desert") || b.contains("badlands") || b.contains("tundra") || b.contains("snowy")) return 1.3f;
+        if (b.contains("forest") || b.contains("jungle") || b.contains("swamp") || b.contains("grove") || b.contains("taiga")) return 0.7f;
+        return 1f;
+    }
+    /** base wind (degrees): 12° × biome, rain ×1.8, thunder ×3, higher = stronger (up to ×2.5 at y ≥ 208), roofed ×0.15 */
+    public static float windStrength(boolean rain, boolean thunder, float biome, double y, boolean sky) {
+        float w = 12f * Math.max(0f, biome);
+        if (thunder) w *= 3f; else if (rain) w *= 1.8f;
+        w *= 1f + clamp((float) (y - 64) / 96f, 0f, 1.5f);
+        if (!sky) w *= 0.15f;
+        return w;
+    }
+    /** gust multiplier (≈0.3..1.7): slow swell + faster flutter + occasional strong gusts; deterministic in t (s) */
+    public static float gust(double t, int seed) {
+        double s = seed * 0.6180339887;
+        double g = 0.75 + 0.2 * Math.sin(0.31 * t + s) + 0.1 * Math.sin(1.7 * t + 2 * s) + 0.05 * Math.sin(4.3 * t + 3 * s);
+        double burst = Math.sin(0.13 * t + 5 * s);
+        if (burst > 0.8) g += (burst - 0.8) * 3.5;  // gust: up to +0.7
+        return (float) clamp((float) g, 0.2f, 1.8f);
+    }
+    /** direction the wind blows toward (Minecraft yaw, degrees), slowly turning */
+    public static float windDir(double t, int seed) { return (float) (seed * 47 % 360 + 40 * Math.sin(0.02 * t + seed)); }
+    /** wind relative to the body: {front (+ = from the front, like walking forward), side (+ = from the right, like strafing right)} */
+    public static float[] windRel(float strength, float dirDeg, float bodyYaw) {
+        double r = Math.toRadians(dirDeg);
+        float[] rel = bodyRelative(-Math.sin(r) * strength, Math.cos(r) * strength, bodyYaw);
+        return new float[]{-rel[0], -rel[1]};
+    }
+
+    // ---------- 1.8.0 look-at ----------
+    /** angles from the head to a target offset (dx, dy, dz): {yaw (+ = right), pitch (+ = below), 1 if visible else 0}; clamped ±maxYaw / ±45 */
+    public static float[] lookAngles(double dx, double dy, double dz, float headYaw, float headPitch, float maxYaw) {
+        double h = Math.sqrt(dx * dx + dz * dz);
+        if (h < 1e-6 && Math.abs(dy) < 1e-6) return new float[]{0, 0, 0};
+        float yawT = (float) (Math.toDegrees(Math.atan2(dz, dx)) - 90.0);
+        float pitchT = (float) -Math.toDegrees(Math.atan2(dy, h));
+        float ry = unwrap(0, yawT - headYaw);
+        if (Math.abs(ry) > 120) return new float[]{0, 0, 0};       // behind: no tracking
+        float rp = pitchT - headPitch;
+        return new float[]{clamp(ry, -maxYaw, maxYaw), clamp(rp, -45, 45), 1};
+    }
+
+    // ---------- 1.8.0 breathing / blinking generators ----------
+    public static class Gen {
+        public String id = "", name = "";
+        public boolean on = true;
+        /** "breath" (smooth oscillation) or "blink" (short pulse at random intervals) */
+        public String kind = "breath";
+        public String anim = "";
+        /** breath: one cycle; blink: mean interval between blinks (ms) */
+        public int periodMs = 3500;
+        /** value range in % of the layer max (lo = rest) */
+        public int lo = 0, hi = 100;
+        /** random variation of period / amplitude (%) */
+        public int rand = 15;
+        /** blink: how long the eye is closed (ms) */
+        public int pulseMs = 150;
+    }
+    public static final class GenState { public double phase; public float amp = 1, mul = 1, t, next = -1, pulse = -1; }
+    /** advances a generator, returns its level 0..1 */
+    public static float stepGen(Gen g, GenState s, float dt, java.util.Random r) {
+        float rnd = clamp(g.rand, 0, 100) / 100f;
+        float period = Math.max(200f, g.periodMs);
+        if ("blink".equals(g.kind)) {
+            if (s.next < 0) s.next = Math.max(200f, period * (1 + rnd * (2 * r.nextFloat() - 1)));
+            float ms = dt * 1000f;
+            if (s.pulse < 0) {
+                s.t += ms;
+                if (s.t < s.next) return 0;
+                s.pulse = 0; s.t = 0;
+            }
+            s.pulse += ms;
+            float len = Math.max(50f, g.pulseMs), p = s.pulse / len;
+            if (p >= 1) { s.pulse = -1; s.next = Math.max(200f, period * (1 + rnd * (2 * r.nextFloat() - 1))); return 0; }
+            return p < 0.3f ? p / 0.3f : p < 0.7f ? 1f : (1 - p) / 0.3f;
+        }
+        s.phase += dt * 1000.0 / (period * s.mul) * 2 * Math.PI;
+        if (s.phase >= 2 * Math.PI) {
+            s.phase -= 2 * Math.PI;
+            s.mul = 1 + rnd * (2 * r.nextFloat() - 1) * 0.5f;
+            s.amp = 1 - rnd * r.nextFloat() * 0.5f;
+        }
+        return (float) (0.5 - 0.5 * Math.cos(s.phase)) * s.amp;
+    }
+    /** level -> CPM value inside [lo, hi] % of maxValue */
+    public static int genValue(Gen g, float level, int maxValue) {
+        float lo = clamp(g.lo, 0, 100), hi = clamp(g.hi, 0, 100);
+        return Math.round((lo + (hi - lo) * clamp(level, 0, 1)) / 100f * Math.max(0, maxValue));
+    }
+
+    // ---------- 1.8.0 mirror + copy ----------
+    public static Input copy(Input i) { Input n = new Input(); n.src = i.src; n.weight = i.weight; n.invert = i.invert; n.hold = i.hold;
+        n.ref = i.ref; n.refMode = i.refMode; n.refHz10 = i.refHz10; return n; }
+
+    // ---------- 1.8.0 "Camada/animação (movimento)" ----------
+    public static final String[] REF_MODES = {"rate", "value", "osc"};
+    /** map key of an input's value: the source name, or one key per watched layer + mode */
+    public static String key(Input in) {
+        return "layer".equals(in.src) ? "layer|" + in.ref + "|" + in.refMode + "|" + in.refHz10 : in.src;
+    }
+    public static final class LayerSig { public float prev = -1; public double phase; }
+    /** value (≤ 0 / -1 = off) of a CPM animation with max value -> degrees: rate ×30 per (fraction/s) clamped ±90, value ×45, osc 45·sin */
+    public static float layerSignal(LayerSig s, int value, int max, float dt, String mode, float hz) {
+        float n = value <= 0 ? 0 : Math.min(1f, value / (float) Math.max(1, max));
+        float prev = s.prev < 0 ? n : s.prev;
+        s.prev = n;
+        if ("value".equals(mode)) return n * 45f;
+        if ("osc".equals(mode)) {
+            if (n <= 0) { s.phase = 0; return 0; }
+            s.phase += dt * Math.max(0.1f, hz) * 2 * Math.PI;
+            if (s.phase > 2 * Math.PI * 1000) s.phase -= 2 * Math.PI * 1000;
+            return (float) (n * 45f * Math.sin(s.phase));
+        }
+        return clamp((n - prev) / Math.max(1e-3f, dt) * 30f, -90f, 90f);
+    }
+    public static TriggerLogic.Cond copy(TriggerLogic.Cond c) { TriggerLogic.Cond n = new TriggerLogic.Cond(c.type, c.value, c.num); n.not = c.not; return n; }
+    public static Link copy(Link l) {
+        Link n = new Link();
+        n.anim = l.anim; n.len = l.len; n.weight = l.weight; n.damp = l.damp; n.gain = l.gain; n.min = l.min; n.max = l.max;
+        n.invert = l.invert; n.lag = l.lag; n.offCombine = l.offCombine; n.softLim = l.softLim; n.limLo = l.limLo; n.limHi = l.limHi;
+        if (l.inputs != null) for (Input i : l.inputs) if (i != null) n.inputs.add(copy(i));
+        if (l.off != null) for (TriggerLogic.Cond c : l.off) if (c != null) n.off.add(copy(c));
+        return n;
+    }
+    public static Chain copy(Chain c, String newId) {
+        Chain n = new Chain();
+        n.id = newId; n.name = c.name; n.on = c.on; n.offCombine = c.offCombine; n.fadeMs = c.fadeMs;
+        for (Link l : c.links) if (l != null) n.links.add(copy(l));
+        if (c.off != null) for (TriggerLogic.Cond q : c.off) if (q != null) n.off.add(copy(q));
+        return n;
+    }
+    /** copy with left/right flipped: lateral and yaw inputs inverted, layers renamed left<->right when such a layer exists (else blank) */
+    public static Chain mirror(Chain c, String newId, String suffix, java.util.Collection<String> layers) {
+        Chain n = copy(c, newId);
+        n.name = (c.name == null ? "" : c.name) + suffix;
+        List<String> ms = java.util.Arrays.asList(MIRROR);
+        for (Link l : n.links) {
+            for (Input i : l.inputs) if (ms.contains(i.src)) i.invert = !i.invert;
+            String m = mirrorName(l.anim);
+            l.anim = m != null && layers != null && layers.contains(m) ? m : "";
+        }
+        return n;
+    }
+    private static final String[][] SIDES = {{"left", "right"}, {"esquerda", "direita"}, {"esquerdo", "direito"}, {"esq", "dir"}, {"l", "r"}, {"e", "d"}};
+    /** "asa_esq" -> "asa_dir", "WingLeft" not split (only _ - . space separated tokens and Left/Right words); null if nothing to swap */
+    public static String mirrorName(String anim) {
+        if (anim == null || anim.isBlank()) return null;
+        StringBuilder out = new StringBuilder(); boolean changed = false;
+        java.util.regex.Matcher m = java.util.regex.Pattern.compile("[\\p{L}\\p{N}]+|[^\\p{L}\\p{N}]+").matcher(anim);
+        while (m.find()) {
+            String tok = m.group(), low = tok.toLowerCase(java.util.Locale.ROOT), rep = null;
+            for (String[] p : SIDES) { if (low.equals(p[0])) rep = p[1]; else if (low.equals(p[1])) rep = p[0]; if (rep != null) break; }
+            if (rep == null) {   // CamelCase words: WingLeft / AsaDireita
+                for (String[] p : SIDES) {
+                    if (p[0].length() < 3) continue;
+                    String a = cap(p[0]), b = cap(p[1]);
+                    if (tok.endsWith(a)) { rep = tok.substring(0, tok.length() - a.length()) + b; break; }
+                    if (tok.endsWith(b)) { rep = tok.substring(0, tok.length() - b.length()) + a; break; }
+                }
+                if (rep != null) { out.append(rep); changed = true; continue; }
+                out.append(tok); continue;
+            }
+            if (tok.equals(tok.toUpperCase(java.util.Locale.ROOT)) && !tok.equals(low)) rep = rep.toUpperCase(java.util.Locale.ROOT);
+            else if (Character.isUpperCase(tok.charAt(0))) rep = cap(rep);
+            out.append(rep); changed = true;
+        }
+        return changed ? out.toString() : null;
+    }
+    private static String cap(String s) { return s.isEmpty() ? s : Character.toUpperCase(s.charAt(0)) + s.substring(1); }
+
+    // ---------- 1.8.0 presets as text ----------
+    public static final String PRESET_PREFIX = "CPMW-L2D1:";
+    public static String wrapPreset(String json) {
+        return PRESET_PREFIX + java.util.Base64.getEncoder().encodeToString(json.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+    }
+    /** clipboard text -> JSON (prefixed Base64 or plain JSON), null if it isn't a preset */
+    public static String unwrapPreset(String text) {
+        if (text == null) return null;
+        String t = text.trim();
+        if (t.startsWith(PRESET_PREFIX)) {
+            try { return new String(java.util.Base64.getDecoder().decode(t.substring(PRESET_PREFIX.length()).replaceAll("\\s", "")), java.nio.charset.StandardCharsets.UTF_8); }
+            catch (IllegalArgumentException e) { return null; }
+        }
+        return t.startsWith("{") && t.endsWith("}") ? t : null;
     }
 
     static float clamp(float v, float a, float b) { return v < a ? a : v > b ? b : v; }

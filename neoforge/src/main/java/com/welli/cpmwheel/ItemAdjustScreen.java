@@ -15,7 +15,7 @@ public class ItemAdjustScreen extends Screen {
     private final WheelConfig cfg;
     public ItemAdjustScreen(Screen parent, WheelConfig cfg) { super(Component.translatable("cpmwheel.adj.title")); this.parent = parent; this.cfg = cfg; }
 
-    private int[] cur() { return cfg.haAdj.computeIfAbsent(HandAnim.CATS[catIdx], k -> new int[7]); }
+    private int[] cur() { return cfg.haAdj.computeIfAbsent(HandAnim.CATS[catIdx], WheelConfig::defAdj); }
 
     @Override
     protected void init() {
@@ -26,7 +26,7 @@ public class ItemAdjustScreen extends Screen {
                 b -> { catIdx = Math.floorMod(catIdx + 1, HandAnim.CATS.length); rebuildWidgets(); }).bounds(x + 22, y, 106, 20).build());
         addRenderableWidget(Button.builder(Component.literal(">"), b -> { catIdx = Math.floorMod(catIdx + 1, HandAnim.CATS.length); rebuildWidgets(); }).bounds(x + 130, y, 20, 20).build());
         y += 24;
-        int[] v = cfg.haAdj.getOrDefault(cat, new int[7]);
+        int[] v = cfg.adj(cat);
         for (int i = 0; i < 7; i++) {
             final int idx = i, min = MIN[i], max = MAX[i], step = STEP[i];
             String key = "cpmwheel.adj." + KEYS[i];

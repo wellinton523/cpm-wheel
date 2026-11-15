@@ -100,6 +100,27 @@ public final class Actions {
         sound(cfg, 1.2f);
     }
 
+    /** 1.8.0 "Teclas de emotes": play an animation without the wheel (uses its wheel button when there is one) */
+    public static void emote(WheelConfig cfg, String anim) {
+        Minecraft mc = Minecraft.getInstance();
+        if (anim == null || anim.isBlank() || mc.player == null) return;
+        for (WheelConfig.Slot s : cfg.allSlots())
+            if (anim.equals(s.anim) && !s.isGroup() && !s.isFolder() && !s.isCond()) {
+                boolean locked = EffectTriggers.lockedBy(s) != null;
+                trigger(cfg, s);
+                if (!locked) mc.player.displayClientMessage(net.minecraft.network.chat.Component.literal("\u25B6 " + s.display()), true);
+                return;
+            }
+        String lk = EffectTriggers.lockedAnim(anim);
+        if (lk != null) { EffectTriggers.lockedFeedback(lk); return; }
+        int cur = CpmBridge.playing(anim);
+        CpmBridge.play(anim, cur > 0 ? 0 : EffectTriggers.onValue(cfg, anim, -1));
+        cfg.addRecent(anim);
+        sound(cfg, 1.2f);
+        Hud.invalidate();
+        mc.player.displayClientMessage(net.minecraft.network.chat.Component.literal("\u25B6 " + anim), true);
+    }
+
     public static void sound(WheelConfig cfg, float pitch) {
         if (cfg == null || !cfg.sounds || cfg.soundVolume <= 0) return;
         Minecraft.getInstance().getSoundManager().play(SimpleSoundInstance.forUI(SoundEvents.UI_BUTTON_CLICK.value(), pitch, cfg.soundVolume / 100f * 0.5f));
@@ -124,6 +145,7 @@ public final class Actions {
         long nowMs = System.currentTimeMillis();
         if (cached == null || nowMs - cachedAt > 2000) refresh();
         EffectTriggers.tick(mc, cached); // 1.5.7 "Gatilhos de efeito"
+        ChainTriggers.tick(mc, cached);  // 1.8.0 "Encadear animações"
         // conditional auto mode: re-evaluate only when the held items change
         if (!autoCond.isEmpty()) {
             var mainS = mc.player.getMainHandItem(); var offS = mc.player.getOffhandItem();

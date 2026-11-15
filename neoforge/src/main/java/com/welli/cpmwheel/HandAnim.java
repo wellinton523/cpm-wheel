@@ -55,13 +55,12 @@ public final class HandAnim {
         gI = c.haIntensity / 100f; bobI = c.haBob / 100f; inerI = c.haInertia / 100f;
         poseI = c.haPose / 100f; swingI = c.haSwing / 100f; idleI = c.haIdle / 100f;
         int[][] na = new int[CATS.length][7];
-        for (int i = 0; i < CATS.length; i++) { int[] v = c.haAdj.get(CATS[i]); if (v != null && v.length == 7) na[i] = v.clone(); }
+        for (int i = 0; i < CATS.length; i++) na[i] = c.adj(CATS[i]).clone(); // 1.8.0: missing = new default
         loadItems(c);
         adj = na; vanillaItem = c.haVanillaItem; twoHandBlock = c.haTwoHandBlock;
         boolean[] fl = new boolean[CATS.length]; for (int i = 0; i < CATS.length; i++) fl[i] = c.haFlat.contains(CATS[i]); flatCats = fl;
         int[][] am = new int[2][7];
-        int[] m = c.haArm.get("main"), o = c.haArm.get("off");
-        if (m != null && m.length == 7) am[0] = m.clone(); if (o != null && o.length == 7) am[1] = o.clone();
+        am[0] = c.arm("main").clone(); am[1] = c.arm("off").clone(); // 1.8.0: missing = new default
         arm = am;
         if (!c.haIgnore.equals(ignored)) { ignored = java.util.List.copyOf(c.haIgnore); recompute(true); }
     }

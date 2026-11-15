@@ -66,7 +66,7 @@ public class PhysicsScreen extends Screen {
         int[] v = lv("cat:" + cat);
         Component cl = Component.translatable("cpmwheel.adj.c." + cat);
         if (v != null) return new Inh(Component.translatable("cpmwheel.phys.from.type", cl), v);
-        if (cat.equals("lantern")) return new Inh(Component.translatable("cpmwheel.phys.from.default", cl), HangPhysics.lantern());
+        if (cat.equals("lantern")) return new Inh(Component.translatable("cpmwheel.phys.from.default", cl), HangPhysics.DEF_LANTERN.clone());
         return new Inh(Component.translatable("cpmwheel.phys.from.none"), null);
     }
 

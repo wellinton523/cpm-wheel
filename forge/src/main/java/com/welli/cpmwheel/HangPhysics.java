@@ -26,6 +26,8 @@ public final class HangPhysics {
             {1, 1, 120, 70, 18, 40, 70, 130, 100, 1, 0}}; // Chaveiro leve: fast, lively, big swing, hangs from the top
     public static final int[] MIN = {0, 0, 0, 5, 5, 20, 5, 0, 0, 0, 0}, MAX = {1, 1, 200, 150, 100, 400, 90, 200, 100, 1, 1};
     public static int[] lantern() { return PRESET_VALUES[0].clone(); }
+    /** 1.8.0: hanging physics of lanterns when nothing is set (the author's tuning; the "Lanterna" preset is unchanged) */
+    public static final int[] DEF_LANTERN = {1, 0, 160, 31, 7, 60, 75, 130, 100, 0, 0};
 
     /** 1.5.8 arrays had 8 values: add gravity 60%, normal limit, not inverted */
     public static int[] upgrade(int[] v) {
@@ -81,7 +83,7 @@ public final class HangPhysics {
         int[] o = at(ITEM.get(it), hi, own);
         if (o == null && !GROUP.isEmpty()) for (String gid : ItemGroups.groupsOf(it)) { o = at(GROUP.get(gid), hi, own); if (o != null) break; }
         if (o == null && !MOD.isEmpty()) o = at(MOD.get(BuiltInRegistries.ITEM.getKey(it).getNamespace()), hi, own);
-        if (o == null) { int c = HandAnim.cat(s); o = at(CAT[c], hi, own); if (o == null && c == 9) { own[0] = true; o = PRESET_VALUES[0]; } }
+        if (o == null) { int c = HandAnim.cat(s); o = at(CAT[c], hi, own); if (o == null && c == 9) { own[0] = true; o = DEF_LANTERN; } }
         return o == null || o[0] == 0 ? null : o;
     }
     public static int[] settings(ItemStack s, int hi) { return settings(s, hi, new boolean[1]); }

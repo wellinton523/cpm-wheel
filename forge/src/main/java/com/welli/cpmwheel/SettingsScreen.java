@@ -96,6 +96,10 @@ public class SettingsScreen extends Screen {
         bool("cpmwheel.set.ring", "cpmwheel.set.tip.ring", () -> cfg.innerRing, v -> cfg.innerRing = v, DEF.innerRing);
         bool("cpmwheel.set.alt", "cpmwheel.set.tip.alt", () -> cfg.altHotkeys, v -> cfg.altHotkeys = v, DEF.altHotkeys);
         bool("cpmwheel.set.framesegs", "cpmwheel.set.tip.framesegs", () -> cfg.frameSegments, v -> cfg.frameSegments = v, DEF.frameSegments);
+        // 1.8.0 "Teclas de emotes"
+        sec("wheel", "emotekeys");
+        bool("cpmwheel.ek.on", "cpmwheel.ek.help", () -> cfg.emoteKeysOn, v -> cfg.emoteKeysOn = v, DEF.emoteKeysOn);
+        link("cpmwheel.set.link.ek", "cpmwheel.ek.help", () -> new EmoteKeysScreen(this, cfg));
         sec("wheel", "sound");
         toggle("cpmwheel.set.tip.sounds", () -> Component.translatable("cpmwheel.set.sounds", onoff(cfg.sounds)), () -> { cfg.sounds = !cfg.sounds; if (cfg.sounds) Actions.sound(cfg, 1.2f); }, () -> cfg.sounds = DEF.sounds);
         slider("cpmwheel.set.volume", "cpmwheel.set.tip.volume", 0, 100, 5, () -> cfg.soundVolume, v -> cfg.soundVolume = v, DEF.soundVolume);
@@ -155,6 +159,11 @@ public class SettingsScreen extends Screen {
         sec("effects", "live2d");
         bool("cpmwheel.l2d.on", "cpmwheel.l2d.on.help", () -> cfg.l2dOn, v -> { cfg.l2dOn = v; Live2d.reset(); }, DEF.l2dOn);
         link("cpmwheel.set.link.l2d", "cpmwheel.set.tip.link.l2d", () -> new Live2dScreen(this, cfg));
+        link("cpmwheel.set.link.l2dext", "cpmwheel.l2d.btn.ext.help", () -> new Live2dExtrasScreen(this, cfg));
+        // ---- 1.8.0 Encadear animações ----
+        sec("effects", "chain");
+        bool("cpmwheel.ct.on", "cpmwheel.ct.help", () -> cfg.chainTrigOn, v -> cfg.chainTrigOn = v, DEF.chainTrigOn);
+        link("cpmwheel.set.link.ct", "cpmwheel.ct.help", () -> new ChainRulesScreen(this, cfg));
 
         // ---- Compatibilidade ----
         sec("compat", "compat");
@@ -192,6 +201,7 @@ public class SettingsScreen extends Screen {
         }, null));
         opts.add(new Opt(curCat, curSec, "cpmwheel.set.tip.copydefault", (x, y, w) -> List.of(Button.builder(Component.translatable("cpmwheel.set.copydefault"), b -> {
             status = cfg.copyFromDefault() ? "\u2714" : "\u2716 (default)"; }).bounds(x, y, w, 20).build()), null));
+        link("cpmwheel.set.link.prof", "cpmwheel.prof.help", () -> new ProfilesScreen(this)); // 1.8.0
         sec("advanced", "other");
         link("cpmwheel.set.link.hud", "cpmwheel.set.tip.link.hud", () -> new HudScreen(this));
     }
@@ -214,7 +224,7 @@ public class SettingsScreen extends Screen {
 
     @Override
     protected void init() {
-        if (cfg == null) { cfg = WheelConfig.get(); presets = WheelConfig.presetNames(); }
+        { WheelConfig now = WheelConfig.get(); if (cfg != now) { cfg = now; presets = WheelConfig.presetNames(); } } // 1.8.0: a profile switch replaces the object
         buildOpts();
         headers.clear();
         int tabW = 112;

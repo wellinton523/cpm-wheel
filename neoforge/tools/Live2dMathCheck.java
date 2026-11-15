@@ -255,8 +255,143 @@ public class Live2dMathCheck {
             ok("noisy walking: offset stays clearly away from rest (" + omin + ".." + omax + ")", omin > 3f);
         }
 
+
+        check180();
+
         System.out.println((fails == 0 ? "ALL OK " : "FAILED ") + (n - fails) + "/" + n);
         if (fails > 0) System.exit(1);
+    }
+
+    static void check180() {
+        // ---------- 1.8.0 ----------
+        ok("new inputs listed, prev stays last", java.util.Arrays.asList(Live2dMath.INPUTS).containsAll(List.of("fall", "grav", "windF", "windS", "hit", "land", "lookYaw", "lookPitch", "voice", "layer"))
+                && Live2dMath.INPUTS[Live2dMath.INPUTS.length - 1].equals("prev"));
+        ok("hold defaults: grav/look/voice 100, wind/fall 75, hit/land/layer 0", Live2dMath.defaultHold("grav") == 100 && Live2dMath.defaultHold("lookYaw") == 100
+                && Live2dMath.defaultHold("voice") == 100 && Live2dMath.defaultHold("windF") == 75 && Live2dMath.defaultHold("fall") == 75
+                && Live2dMath.defaultHold("hit") == 0 && Live2dMath.defaultHold("land") == 0 && Live2dMath.defaultHold("layer") == 0);
+        // soft limit
+        ok("soft clamp: identity inside", near(Live2dMath.softClamp(10, -45, 45), 10, 1e-4f) && near(Live2dMath.softClamp(-30, -45, 45), -30, 1e-4f));
+        ok("soft clamp: never passes the limit", Live2dMath.softClamp(500, -45, 45) <= 45 && Live2dMath.softClamp(500, -45, 45) > 44.9f && Live2dMath.softClamp(-500, -45, 45) >= -45 && Live2dMath.softClamp(60, -45, 45) < 45);
+        ok("soft clamp: continuous at the knee", near(Live2dMath.softClamp(35.001f, -45, 45), 35.001f, 0.01f) && Live2dMath.softClamp(40, -45, 45) < 40 && Live2dMath.softClamp(40, -45, 45) > 38);
+        boolean mono = true; float pv = -1e9f;
+        for (float x = -200; x <= 200; x += 0.5f) { float y = Live2dMath.softClamp(x, -45, 45); if (y < pv - 1e-4f) mono = false; pv = y; }
+        ok("soft clamp: monotonic", mono);
+        ok("soft clamp: reversed limits and NaN", near(Live2dMath.softClamp(0, 45, -45), 0, 1e-4f) && Float.isFinite(Live2dMath.softClamp(Float.NaN, -45, 45)));
+        Link lim = new Link("headYaw", false); lim.damp = 100;
+        ok("limit off by default = unchanged", near(Live2dMath.limit(lim, 80), 80, 1e-4f));
+        lim.softLim = true; lim.limLo = -30; lim.limHi = 30;
+        ok("limit on: 80° stays under 30°", Live2dMath.limit(lim, 80) < 30);
+        {   State ls = new State(); java.util.Map<String, Float> m = new java.util.HashMap<>(); float[] o = new float[1];
+            m.put("headYaw", 0f); Live2dMath.stepChain(List.of(lim), new State[]{ls}, m, 0.05f, o);
+            m.put("headYaw", 90f); float mx = 0; for (int i = 0; i < 100; i++) { Live2dMath.stepChain(List.of(lim), new State[]{ls}, m, 0.05f, o); mx = Math.max(mx, o[0]); }
+            ok("chain output respects the soft limit", mx < 30 && mx > 25); }
+        // impulses
+        Live2dMath.Impulse im = new Live2dMath.Impulse();
+        ok("no impulse = 0", Live2dMath.decay(im, 0.05f, 0.12f) == 0);
+        Live2dMath.kick(im, Live2dMath.hitPeak(4));
+        ok("hit 4 HP = 32°", near(Live2dMath.decay(im, 0.05f, 0.12f), 32, 1e-3f));
+        float after = 0; for (int i = 0; i < 20; i++) after = Live2dMath.decay(im, 0.05f, 0.12f);
+        ok("impulse dies out within 1 s", after < 0.1f);
+        Live2dMath.kick(im, 50); Live2dMath.kick(im, 10);
+        ok("a smaller hit doesn't replace a bigger one", near(im.v, 50, 1e-3f));
+        ok("landing: normal jump ≈ 0, 3 blocks small, high fall capped", Live2dMath.landPeak(4.5f) == 0 && Live2dMath.landPeak(7.7f) > 10 && Live2dMath.landPeak(7.7f) < 20 && Live2dMath.landPeak(60) == 90);
+        ok("hit capped at 90°", Live2dMath.hitPeak(100) == 90 && Live2dMath.hitPeak(-3) == 0);
+        {   Link hl = new Link("hit", true); hl.damp = 25; State hs = new State(); java.util.Map<String, Float> m = new java.util.HashMap<>(); float[] o = new float[1];
+            Live2dMath.Impulse ii = new Live2dMath.Impulse();
+            m.put("hit", 0f); Live2dMath.stepChain(List.of(hl), new State[]{hs}, m, 0.05f, o);
+            Live2dMath.kick(ii, 40); float peak = 0;
+            for (int i = 0; i < 200; i++) { m.put("hit", Live2dMath.decay(ii, 0.05f, 0.12f)); Live2dMath.stepChain(List.of(hl), new State[]{hs}, m, 0.05f, o); if (i < 20) peak = Math.max(peak, Math.abs(o[0])); }
+            ok("hit input: a swing, then back to rest", peak > 10 && near(o[0], 0, 0.3f)); }
+        // wind
+        ok("biome wind: peaks windy, forest calm, cave very calm", Live2dMath.biomeWind("minecraft:jagged_peaks") > Live2dMath.biomeWind("minecraft:plains")
+                && Live2dMath.biomeWind("minecraft:forest") < 1 && Live2dMath.biomeWind("minecraft:deep_dark") < Live2dMath.biomeWind("minecraft:forest") && Live2dMath.biomeWind(null) == 1);
+        float wc = Live2dMath.windStrength(false, false, 1, 64, true), wr = Live2dMath.windStrength(true, false, 1, 64, true), wt = Live2dMath.windStrength(true, true, 1, 64, true);
+        ok("wind: clear < rain < thunder", wc > 0 && wc < wr && wr < wt);
+        ok("wind: higher = stronger, capped", Live2dMath.windStrength(false, false, 1, 160, true) > wc && near(Live2dMath.windStrength(false, false, 1, 1000, true), wc * 2.5f, 1e-3f));
+        ok("wind: under a roof much weaker", Live2dMath.windStrength(false, false, 1, 64, false) < wc * 0.2f);
+        float gmin = 9, gmax = -9; for (int i = 0; i < 20000; i++) { float gg = Live2dMath.gust(i * 0.05, 3); gmin = Math.min(gmin, gg); gmax = Math.max(gmax, gg); }
+        ok("gusts vary and stay bounded (" + gmin + ".." + gmax + ")", gmin >= 0.2f && gmax <= 1.8f && gmax - gmin > 0.6f && gmax > 1.2f);
+        float[] wf = Live2dMath.windRel(10, 180, 0);   // facing +Z (yaw 0), wind blowing toward yaw 180 = −Z = into the face
+        ok("headwind is + front (like walking forward)", wf[0] > 9.9f && Math.abs(wf[1]) < 1e-3f);
+        float[] ws = Live2dMath.windRel(10, 90, 0);    // blowing toward −X = toward the right side's opposite? (right of +Z is −X)
+        ok("wind toward the right = from the left = − side", ws[1] < -9.9f);
+        // look-at
+        float[] la = Live2dMath.lookAngles(0, 0, 5, 0, 0, 60);
+        ok("look: target straight ahead = 0,0", la[2] == 1 && near(la[0], 0, 1e-3f) && near(la[1], 0, 1e-3f));
+        la = Live2dMath.lookAngles(-5, 0, 5, 0, 0, 60);  // facing +Z, −X is the right side
+        ok("look: target front-right = +45° yaw", near(la[0], 45, 0.01f));
+        la = Live2dMath.lookAngles(0, -5, 5, 0, 0, 60);
+        ok("look: target below = + pitch", near(la[1], 45, 0.01f));
+        ok("look: behind = no tracking", Live2dMath.lookAngles(0, 0, -5, 0, 0, 60)[2] == 0);
+        ok("look: clamped to max yaw", near(Live2dMath.lookAngles(-5, 0, 0.5, 0, 0, 60)[0], 60, 1e-3f));
+        ok("look: relative to head yaw", near(Live2dMath.lookAngles(-5, 0, 0, 90, 0, 60)[0], 0, 0.01f));
+        // generators
+        {   Live2dMath.Gen g = new Live2dMath.Gen(); g.periodMs = 2000; g.rand = 0;
+            Live2dMath.GenState gs = new Live2dMath.GenState(); java.util.Random rr = new java.util.Random(1);
+            float lo = 9, hi = -9, at1s = 0;
+            for (int i = 0; i < 80; i++) { float lv = Live2dMath.stepGen(g, gs, 0.05f, rr); lo = Math.min(lo, lv); hi = Math.max(hi, lv); if (i == 19) at1s = lv; }
+            ok("breath: 0..1 range", lo >= 0 && lo < 0.02f && hi <= 1 && hi > 0.98f);
+            ok("breath: peak at half the period", near(at1s, 1, 0.01f));
+            ok("breath value inside lo..hi %", Live2dMath.genValue(g, 0, 255) == 0 && Live2dMath.genValue(g, 1, 255) == 255);
+            g.lo = 20; g.hi = 60;
+            ok("breath 20..60 % of 200 = 40..120", Live2dMath.genValue(g, 0, 200) == 40 && Live2dMath.genValue(g, 1, 200) == 120 && Live2dMath.genValue(g, 2, 200) == 120);
+            g.rand = 50; gs = new Live2dMath.GenState(); java.util.Set<Long> peaks = new java.util.HashSet<>();
+            for (int i = 0; i < 2000; i++) { float lv = Live2dMath.stepGen(g, gs, 0.05f, rr); if (Float.isNaN(lv)) peaks.add(-1L); }
+            ok("breath with random variation stays finite", !peaks.contains(-1L) && gs.mul >= 0.75f && gs.mul <= 1.25f && gs.amp >= 0.75f);
+            Live2dMath.Gen b = new Live2dMath.Gen(); b.kind = "blink"; b.periodMs = 3000; b.rand = 40; b.pulseMs = 150;
+            Live2dMath.GenState bs = new Live2dMath.GenState(); int blinks = 0, closedTicks = 0; float prevLv = 0; boolean full = false;
+            for (int i = 0; i < 20 * 60; i++) { float lv = Live2dMath.stepGen(b, bs, 0.05f, rr); if (lv > 0 && prevLv == 0) blinks++; if (lv >= 1) { full = true; closedTicks++; } prevLv = lv; }
+            ok("blink: ~20 blinks per minute at 3 s (" + blinks + ")", blinks >= 14 && blinks <= 28);
+            ok("blink: fully closes, but briefly", full && closedTicks <= blinks * 3);
+            b.rand = 0; bs = new Live2dMath.GenState(); java.util.List<Integer> gaps = new java.util.ArrayList<>(); int last = -1;
+            for (int i = 0; i < 2000; i++) { float lv = Live2dMath.stepGen(b, bs, 0.05f, rr); if (lv > 0 && (i == 0 || last < i - 1)) { } if (lv > 0) { if (last >= 0 && i - last > 5) gaps.add(i - last); last = i; } }
+            ok("blink without variation: regular intervals", !gaps.isEmpty() && java.util.Collections.max(gaps) - java.util.Collections.min(gaps) <= 1);
+        }
+        // mirror
+        ok("mirror names", "asa_dir".equals(Live2dMath.mirrorName("asa_esq")) && "WingRight".equals(Live2dMath.mirrorName("WingLeft"))
+                && "fis-asa-D".equals(Live2dMath.mirrorName("fis-asa-E")) && "ear_LEFT".equals(Live2dMath.mirrorName("ear_RIGHT"))
+                && "AsaEsquerda".equals(Live2dMath.mirrorName("AsaDireita")) && Live2dMath.mirrorName("cabelo") == null && Live2dMath.mirrorName("") == null);
+        {   Live2dMath.Chain mc = new Live2dMath.Chain(); mc.id = "a"; mc.name = "Asa E"; mc.fadeMs = 500;
+            Link m0 = new Link("headYaw", true).add("side", 40, false).add("fwd", 20, true); m0.anim = "asa_esq"; m0.softLim = true; m0.limHi = 20;
+            m0.off.add(new com.welli.cpmwheel.TriggerLogic.Cond("anim", "voar", 1));
+            Link m1 = new Link("prev", true); m1.anim = "ponta_esq";
+            mc.links.add(m0); mc.links.add(m1);
+            Live2dMath.Chain mr = Live2dMath.mirror(mc, "b", " (espelho)", List.of("asa_esq", "asa_dir"));
+            ok("mirror: yaw and side inverted, forward kept", mr.links.get(0).inputs.get(0).invert && mr.links.get(0).inputs.get(1).invert && mr.links.get(0).inputs.get(2).invert);
+            ok("mirror: layer swapped when it exists, blank when not", "asa_dir".equals(mr.links.get(0).anim) && "".equals(mr.links.get(1).anim));
+            ok("mirror: settings, limits and conditions copied", mr.fadeMs == 500 && mr.links.get(0).softLim && mr.links.get(0).limHi == 20 && mr.links.get(0).off.size() == 1 && "b".equals(mr.id) && "Asa E (espelho)".equals(mr.name));
+            ok("mirror: deep copy (original untouched)", !mc.links.get(0).inputs.get(0).invert && mc.links.get(0).off.get(0) != mr.links.get(0).off.get(0) && "asa_esq".equals(mc.links.get(0).anim));
+        }
+        // presets as text
+        String js = "{\"chains\":[{\"name\":\"Cabelo ç\"}]}";
+        ok("preset text round trip (UTF-8)", js.equals(Live2dMath.unwrapPreset(Live2dMath.wrapPreset(js))) && Live2dMath.wrapPreset(js).startsWith("CPMW-L2D1:"));
+        ok("preset: plain JSON accepted, garbage rejected", js.equals(Live2dMath.unwrapPreset("  " + js + "\n")) && Live2dMath.unwrapPreset("hello") == null
+                && Live2dMath.unwrapPreset("CPMW-L2D1:%%%") == null && Live2dMath.unwrapPreset(null) == null);
+        // layer motion input
+        {   Live2dMath.LayerSig ls = new Live2dMath.LayerSig();
+            ok("layer rate: first read = 0", Live2dMath.layerSignal(ls, 0, 255, 0.05f, "rate", 4) == 0);
+            float r1 = Live2dMath.layerSignal(ls, 51, 255, 0.05f, "rate", 4);   // +0.2 in one tick = 4/s -> 120 -> clamped 90
+            ok("layer rate: fast change clamps at 90", near(r1, 90, 1e-3f));
+            float r2 = Live2dMath.layerSignal(ls, 56, 255, 0.05f, "rate", 4);   // +5/255 in a tick ≈ 0.39/s -> 11.8°
+            ok("layer rate: slow change small", r2 > 10 && r2 < 13);
+            ok("layer rate: steady = 0", Live2dMath.layerSignal(ls, 56, 255, 0.05f, "rate", 4) == 0);
+            ok("layer rate: falling is negative", Live2dMath.layerSignal(ls, 40, 255, 0.05f, "rate", 4) < 0);
+            Live2dMath.LayerSig lv = new Live2dMath.LayerSig();
+            ok("layer value: max = 45°, off (-1) = 0", near(Live2dMath.layerSignal(lv, 255, 255, 0.05f, "value", 4), 45, 1e-3f) && Live2dMath.layerSignal(lv, -1, 255, 0.05f, "value", 4) == 0);
+            Live2dMath.LayerSig lo2 = new Live2dMath.LayerSig(); float omin = 0, omax = 0; int zc = 0; float pz = 0;
+            for (int i = 0; i < 40; i++) { float o = Live2dMath.layerSignal(lo2, 1, 1, 0.05f, "osc", 2); omin = Math.min(omin, o); omax = Math.max(omax, o); if (pz <= 0 && o > 0) zc++; pz = o; }
+            ok("layer osc: flaps ±45 at 2 Hz while active (" + zc + " cycles in 2 s)", omax > 40 && omin < -40 && zc >= 3 && zc <= 5);
+            ok("layer osc: stops when the animation stops", Live2dMath.layerSignal(lo2, 0, 1, 0.05f, "osc", 2) == 0 && lo2.phase == 0);
+            // a flapping wing animation pushes the hair chain through a "layer" input
+            Link hl = new Link("headYaw", true); hl.inputs.clear(); Live2dMath.Input li = new Live2dMath.Input("layer", 50, false); li.ref = "voar"; li.refMode = "osc"; li.refHz10 = 20; hl.inputs.add(li); hl.damp = 25;
+            State hs = new State(); java.util.Map<String, Float> m = new java.util.HashMap<>(); float[] o = new float[1]; Live2dMath.LayerSig sg = new Live2dMath.LayerSig();
+            float amp = 0;
+            for (int i = 0; i < 100; i++) { m.put(Live2dMath.key(li), Live2dMath.layerSignal(sg, i < 60 ? 1 : 0, 1, 0.05f, li.refMode, li.refHz10 / 10f)); Live2dMath.stepChain(List.of(hl), new State[]{hs}, m, 0.05f, o); if (i > 20 && i < 60) amp = Math.max(amp, Math.abs(o[0])); }
+            for (int i = 0; i < 200; i++) { m.put(Live2dMath.key(li), Live2dMath.layerSignal(sg, 0, 1, 0.05f, li.refMode, 2)); Live2dMath.stepChain(List.of(hl), new State[]{hs}, m, 0.05f, o); }
+            ok("flapping animation moves the hair (" + amp + "°), rests after", amp > 5 && near(o[0], 0, 0.3f));
+            ok("layer key depends on layer and mode", !Live2dMath.key(li).equals(Live2dMath.key(new Live2dMath.Input("layer", 50, false))) && "headYaw".equals(Live2dMath.key(new Live2dMath.Input("headYaw", 1, false))));
+        }
+
     }
 
     static Link wing(int hold) { Link w = new Link("fwd", true); w.inputs.get(0).weight = 20; w.inputs.get(0).invert = true; w.inputs.get(0).hold = hold; w.damp = 25; return w; }

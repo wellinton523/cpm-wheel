@@ -1,6 +1,8 @@
+<p align="center"><img src="docs/cpmwheel-icon.png" width="128" alt="Ícone do CPM Wheel"></p>
+
 # CPM Wheel
 
-![versão](https://img.shields.io/badge/vers%C3%A3o-1.7.3-2ee6ff)
+![versão](https://img.shields.io/badge/vers%C3%A3o-1.8.0-2ee6ff)
 ![NeoForge 1.21.1](https://img.shields.io/badge/NeoForge-1.21.1%20(21.1.x)-orange)
 ![Forge 1.20.1](https://img.shields.io/badge/Forge-1.20.1%20(47.x)-blue)
 ![lado](https://img.shields.io/badge/lado-cliente-lightgrey)
@@ -12,17 +14,21 @@ Roda radial para organizar e tocar as animações do **[Customizable Player Mode
 - ajustes de posição por item, grupo ou mod;
 - física de itens pendurados;
 - gatilhos automáticos com condições, transições e sons;
-- **Física Live2D** para cabelo, cauda e asas, escrita nas camadas de valor do CPM.
+- **Física Live2D** para cabelo, cauda e asas, escrita nas camadas de valor do CPM, com prévia ao vivo, vento, impactos, olhar, voz e respiração/piscar;
+- teclas de emotes, encadear animações e perfis automáticos por modelo.
 
 Autor: **Zeraph**. Mod só de cliente: o servidor não precisa ter.
 
-> Todas as telas do jogo estão em português (com tradução em inglês). Não há capturas de tela no repositório ainda.
+> Todas as telas do jogo estão em português (com tradução em inglês).
+>
+> **Capturas de tela:** ainda não há. As telas só existem dentro do Minecraft e não dá para gerá-las sem abrir o jogo; elas serão adicionadas em `docs/` quando forem tiradas no jogo.
 
 ---
 
 ## Sumário
 - [Requisitos e instalação](#requisitos-e-instalação)
 - [Recursos](#recursos)
+- [Novidades da 1.8.0](#novidades-da-180)
 - [Guia rápido: Física Live2D (cabelo)](#guia-rápido-física-live2d-cabelo)
 - [Configuração e teclas](#configuração-e-teclas)
 - [Compilar](#compilar)
@@ -184,6 +190,30 @@ Fica em Configurações › Gatilhos de efeito › **Física Live2D** e vem **de
 
 ---
 
+## Novidades da 1.8.0
+
+Tudo vem **desligado** e não faz nada até você ligar.
+
+### Física Live2D
+- **Prévia ao vivo** (botão "Prévia"): gráficos do ângulo e do valor de cada elo (últimos 5 s), desenho animado da corrente e controles "Sim." que fingem andar, vento, olhar e voz enquanto a tela está aberta.
+- **Entradas novas:** Queda, Gravidade/olhar, Vento frente/trás e lados, Impacto (dano / aterrissar), Olhar (lados / cima-baixo), Voz e **Camada/animação (movimento)**.
+- **Extras** (botão "Extras"):
+  - **Vento**: rajadas; chuva ×1,8, tempestade ×3; mais forte no alto e em biomas abertos, fraco embaixo de teto;
+  - **Impactos**: um tranco ao levar dano ou ao cair no chão;
+  - **Olhar**: ângulo até o jogador (ou criatura) mais perto dentro do raio;
+  - **Voz**: com o [Simple Voice Chat](https://modrinth.com/plugin/simple-voice-chat) (opcional) a boca abre e fecha enquanto você fala;
+  - **Animação em movimento**: outra animação do CPM empurra a física (modo taxa, valor ou oscilar — ex.: asas batendo mexem o cabelo);
+  - **Respirar e piscar**: geradores automáticos de camadas de valor.
+- **Limite suave** por elo (⚙), **Espelhar** corrente (esq./dir.) e **Presets** em arquivo (`config/cpmwheel/l2d/`) ou texto `CPMW-L2D1:…`.
+
+### Outros
+- **Teclas de emotes:** até 8 teclas para tocar emotes escolhidos sem abrir a roda.
+- **Encadear animações:** "quando A terminar/começar, depois de X ms, ativar/desativar/alternar B".
+- **Perfis automáticos por modelo:** vários modelos do CPM podem usar o mesmo perfil com nome; trocar de modelo troca o perfil.
+- **Padrões novos de mãos e itens** (ajustes por tipo de item, braço e lanterna). Configurações já salvas não mudam.
+
+---
+
 ## Guia rápido: Física Live2D (cabelo)
 
 **No editor do CPM:**
@@ -215,14 +245,17 @@ Fica em Configurações › Gatilhos de efeito › **Física Live2D** e vem **de
 | Mostrar/ocultar HUD do CPM | **H** |
 | Editar roda de animações | sem tecla |
 | Mover HUD do CPM Wheel | sem tecla |
+| Emote rápido 1–8 (1.8.0) | sem tecla |
 
 - **Configurações:** botão **Opções…** na roda. As abas são Roda e botões, Estilo, HUD, Primeira pessoa, Itens e mods, Gatilhos de efeito, Compatibilidade e Avançado.
   - Tem busca no topo, dica em toda opção e "↺ Padrões" por seção.
 - **Arquivos:**
   - `config/cpmwheel/<perfil do modelo>.json`: uma config por modelo do CPM; sem modelo, `default.json`;
   - `config/cpmwheel/presets/`: presets salvos em Avançado › Presets e perfil;
-  - `config/cpmwheel/icons/`: PNGs para os ícones `file:nome.png`.
-- A config tem número de versão (atual **23**) e é migrada sozinha ao atualizar o mod.
+  - `config/cpmwheel/icons/`: PNGs para os ícones `file:nome.png`;
+  - `config/cpmwheel/l2d/`: presets da Física Live2D;
+  - `config/cpmwheel/_profiles.json` e `config/cpmwheel/profiles/`: perfis automáticos por modelo.
+- A config tem número de versão (atual **24**) e é migrada sozinha ao atualizar o mod.
 
 ---
 
@@ -258,6 +291,7 @@ Notas completas em cada [release](https://github.com/wellinton523/cpm-wheel/rele
 
 | Versão | Destaques |
 |---|---|
+| [1.8.0](https://github.com/wellinton523/cpm-wheel/releases/tag/v1.8.0) | Prévia ao vivo da física, vento, impactos, olhar, voz (Simple Voice Chat), animação em movimento, respirar/piscar, limite suave, espelhar, presets; teclas de emotes, encadear animações, perfis por modelo, ícone |
 | [1.7.3](https://github.com/wellinton523/cpm-wheel/releases/tag/v1.7.3) | Física Live2D: **Tranco ↔ Mantido** por entrada (velocidades mantêm o elo deslocado), velocidades suavizadas pelo deslocamento real |
 | [1.7.2](https://github.com/wellinton523/cpm-wheel/releases/tag/v1.7.2) | Física Live2D: **Desativar quando** (animações, voar, planar, nadar, montar, dormir…) com fade; condições novas nos Gatilhos |
 | [1.7.1](https://github.com/wellinton523/cpm-wheel/releases/tag/v1.7.1) | Várias entradas por elo, camadas compartilhadas (Soma/Média/Maior), andar frente/trás e para os lados |
@@ -283,6 +317,8 @@ Notas completas em cada [release](https://github.com/wellinton523/cpm-wheel/rele
   - na condição "Animação", uma camada de valor no repouso (≈128) conta como tocando com mínimo 1, então aumente o mínimo;
   - o tempo de fade é por corrente, não por elo;
   - "Pausar c/ gatilho" é imediato, sem fade.
+- **Voz:** o Simple Voice Chat não informa o volume do seu próprio microfone, então a boca só sabe "falando / calado" e faz um abre-e-fecha sintético. É lido por reflexão; se o mod mudar por dentro, a entrada se desliga sozinha (aparece no log).
+- **Perfis automáticos:** o perfil troca a config inteira; não dá para escolher só algumas partes de um perfil.
 - **Gatilhos:**
   - "Chuva" vale para o mundo, mesmo debaixo de um teto ou num bioma seco;
   - noite e dia nunca valem no Nether/End.
@@ -294,7 +330,7 @@ Notas completas em cada [release](https://github.com/wellinton523/cpm-wheel/rele
 
 ## Licença e créditos
 
-- Licença: **MIT**, como declarado em `gradle.properties` (`mod_license`) e no `mods.toml`. O `neoforge/TEMPLATE_LICENSE.txt` é a licença do template do NeoForge MDK.
+- Licença: **MIT** — veja [`LICENSE`](LICENSE) (também declarado em `gradle.properties` e no `mods.toml`). O `neoforge/TEMPLATE_LICENSE.txt` é a licença do template do NeoForge MDK.
 - Autor: **Zeraph**.
 - Feito para o [Customizable Player Models](https://github.com/tom5454/CustomPlayerModels), de tom5454. O CPM Wheel usa a API de cliente do CPM e não inclui código dele.
 - O modo de braço "como Better Combat" imita a forma como o [Better Combat](https://github.com/ZsoltMolnarrr/BetterCombat) desenha os braços; nenhum código do Better Combat é incluído.
@@ -315,5 +351,7 @@ Notas completas em cada [release](https://github.com/wellinton523/cpm-wheel/rele
 - **Física Live2D:** spring physics chains that drive CPM value layers.
   - Multiple weighted inputs per link and shared layers.
   - "Disable when" conditions with fades.
+  - 1.8.0: live preview, wind, impacts, look-at, voice (Simple Voice Chat), animation-driven input, breathing/blinking, soft limits, mirroring, presets.
+- 1.8.0: quick emote keys, chained animations, automatic per-model profiles. All new features are off by default.
 
 Build with `./gradlew build` inside `neoforge/` (Java 21) or `forge/` (Java 17). License: MIT.
