@@ -26,6 +26,10 @@ public final class Live2d {
     private static final Map<Integer, Integer> LOCAL = new HashMap<>();
     /** live preview: chainId#i -> {angle, value, max} */
     private static final Map<String, float[]> LIVE = new HashMap<>();
+    /** 1.7.1: anim -> number of links using it / value written after combining */
+    private static final Map<String, Integer> SHARED = new HashMap<>(), COMBINED = new HashMap<>();
+    public static int shared(String anim) { return SHARED.getOrDefault(anim, 0); }
+    public static Integer combined(String anim) { return COMBINED.get(anim); }
     private static float yawU, bodyU; private static boolean inputsInit = false;
     private static double lastY; private static boolean failed = false;
     private static WheelConfig cfg; private static long cfgAt = 0;
@@ -34,7 +38,7 @@ public final class Live2d {
     public static boolean failed() { return failed; }
 
     /** "Zerar física": restart from rest and rewrite every value */
-    public static void reset() { STATES.clear(); WRITTEN.clear(); LOCAL.clear(); LIVE.clear(); inputsInit = false; }
+    public static void reset() { STATES.clear(); WRITTEN.clear(); LOCAL.clear(); LIVE.clear(); SHARED.clear(); COMBINED.clear(); inputsInit = false; }
 
     /** config changed in a screen */
     public static void use(WheelConfig c) { cfg = c; cfgAt = System.currentTimeMillis(); }
@@ -57,10 +61,17 @@ public final class Live2d {
             float walk = (float) Math.sqrt(mv.x * mv.x + mv.z * mv.z) * 20f * 10f;
             float vert = (float) (p.getY() - lastY) * 20f * 10f; lastY = p.getY();
             if (p.onGround() && Math.abs(vert) < 0.5f) vert = 0;
-            Map<String, Float> in = Map.of("headYaw", yawU, "headPitch", p.getXRot(), "bodyYaw", bodyU, "walk", walk, "vert", vert, "prev", 0f);
+            float[] rel = Live2dMath.bodyRelative(mv.x, mv.z, body); // signed, relative to the body facing
+            float fwd = rel[0] * 20f * 10f, side = rel[1] * 20f * 10f;   // + forward / + right
+            float headRel = Live2dMath.unwrap(0, yaw - body);
+            Map<String, Float> in = new HashMap<>();
+            in.put("headYaw", yawU); in.put("headPitch", p.getXRot()); in.put("bodyYaw", bodyU); in.put("headRel", headRel);
+            in.put("walk", walk); in.put("fwd", fwd); in.put("side", side); in.put("vert", vert);
 
             Set<String> driven = new HashSet<>(), paused = new HashSet<>(), seen = new HashSet<>();
             boolean anyChange = false;
+            // 1.7.1: every link adds its value to its layer; layers are combined and written once per tick
+            Map<String, java.util.List<int[]>> per = new LinkedHashMap<>(); // anim -> {value, rest, max}
             for (Live2dMath.Chain ch : c.l2dChains) {
                 if (!ch.on || ch.links.isEmpty()) continue;
                 seen.add(ch.id);
@@ -70,22 +81,31 @@ public final class Live2d {
                     for (int i = 0; i < st.length; i++) st[i] = new Live2dMath.State();
                     STATES.put(ch.id, st);
                 }
-                float[] ext = new float[st.length], out = new float[st.length];
-                for (int i = 0; i < st.length; i++) ext[i] = in.getOrDefault(ch.links.get(i).input, 0f);
-                Live2dMath.stepChain(ch.links, st, ext, 0.05f, out);
+                float[] out = new float[st.length];
+                Live2dMath.stepChain(ch.links, st, in, 0.05f, out);
                 for (int i = 0; i < st.length; i++) {
                     Live2dMath.Link l = ch.links.get(i);
                     if (l.anim.isBlank()) { LIVE.put(ch.id + "#" + i, new float[]{out[i], -1, 0}); continue; }
                     int max = CpmBridge.maxValue(l.anim);
                     int v = Live2dMath.toValue(out[i], l.min, l.max, max);
                     LIVE.put(ch.id + "#" + i, new float[]{out[i], v, max});
-                    if (driven.contains(l.anim)) continue; // the first link using a layer wins
-                    if (c.l2dPauseTrig && EffectTriggers.held(l.anim)) { paused.add(l.anim); WRITTEN.remove(l.anim); continue; }
-                    driven.add(l.anim);
-                    REST.put(l.anim, Live2dMath.toValue(0, l.min, l.max, max));
-                    Integer old = WRITTEN.get(l.anim);
-                    if (old == null || old != v) { write(c, l.anim, v, max); WRITTEN.put(l.anim, v); anyChange = true; }
+                    per.computeIfAbsent(l.anim, k -> new java.util.ArrayList<>()).add(new int[]{v, Live2dMath.toValue(0, l.min, l.max, max), max});
                 }
+            }
+            SHARED.clear(); COMBINED.clear();
+            for (var e : per.entrySet()) {
+                String anim = e.getKey(); var list = e.getValue();
+                SHARED.put(anim, list.size());
+                if (c.l2dPauseTrig && EffectTriggers.held(anim)) { paused.add(anim); WRITTEN.remove(anim); continue; }
+                int[] vals = new int[list.size()], rests = new int[list.size()];
+                for (int i = 0; i < vals.length; i++) { vals[i] = list.get(i)[0]; rests[i] = list.get(i)[1]; }
+                int max = list.get(0)[2];
+                int v = Live2dMath.combine(vals, rests, c.l2dModes.getOrDefault(anim, "sum"), max);
+                COMBINED.put(anim, v);
+                driven.add(anim);
+                REST.put(anim, rests[0]);
+                Integer old = WRITTEN.get(anim);
+                if (old == null || old != v) { write(c, anim, v, max); WRITTEN.put(anim, v); anyChange = true; }
             }
             STATES.keySet().removeIf(k -> !seen.contains(k));
             LIVE.keySet().removeIf(k -> !seen.contains(k.substring(0, k.lastIndexOf('#'))));

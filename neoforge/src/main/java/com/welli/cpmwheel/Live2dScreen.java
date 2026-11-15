@@ -20,7 +20,7 @@ public class Live2dScreen extends Screen {
     private static int selLink = 0;
     private int page = 0;
     private boolean confirmDelete = false;
-    private int linksY = 0;
+    private int linksY = 0, liveY = 0;
 
     public Live2dScreen(Screen parent, WheelConfig cfg) { super(Component.translatable("cpmwheel.l2d.title")); this.parent = parent; this.cfg = cfg; }
 
@@ -33,12 +33,13 @@ public class Live2dScreen extends Screen {
         c.id = WheelConfig.newId("c");
         if (kind.equals("tail")) {
             c.name = Component.translatable("cpmwheel.l2d.preset.tail").getString();
-            Live2dMath.Link a = new Live2dMath.Link("bodyYaw", true); a.len = 160; a.weight = 150; a.damp = 25;
+            Live2dMath.Link a = new Live2dMath.Link("bodyYaw", true).add("side", 30, true); a.len = 160; a.weight = 150; a.damp = 25;
             Live2dMath.Link b = new Live2dMath.Link("prev", true); b.len = 140; b.damp = 25;
             c.links.add(a); c.links.add(b);
         } else {
             c.name = Component.translatable("cpmwheel.l2d.preset.hair").getString();
-            Live2dMath.Link a = new Live2dMath.Link("headYaw", true);
+            // head turn 100 % + body turn 50 % inverted + a little forward/backward walking (follow-through)
+            Live2dMath.Link a = new Live2dMath.Link("headYaw", true).add("bodyYaw", 50, true).add("fwd", 20, true);
             Live2dMath.Link b = new Live2dMath.Link("prev", true); b.len = 80;
             c.links.add(a); c.links.add(b);
         }
@@ -108,8 +109,10 @@ public class Live2dScreen extends Screen {
             final int li = i;
             Live2dMath.Link l = ch.links.get(i);
             String an = l.anim.isBlank() ? "\u2014" : l.anim;
-            Button lb = Button.builder(Component.literal(font.plainSubstrByWidth((i + 1) + ". " + an, 100)), b -> { selLink = li; rebuildWidgets(); })
-                    .tooltip(Tooltip.create(Component.translatable("cpmwheel.l2d.link.tip", Component.translatable("cpmwheel.l2d.in." + l.input)))).bounds(x2, y2, 106, 18).build();
+            int sh = shareCount(l.anim);
+            Button lb = Button.builder(Component.literal(font.plainSubstrByWidth((i + 1) + ". " + an, sh > 1 ? 84 : 100) + (sh > 1 ? " \u29C9" + sh : "")), b -> { selLink = li; rebuildWidgets(); })
+                    .tooltip(Tooltip.create(Component.translatable("cpmwheel.l2d.link.tip", inputsText(l))
+                            .append(sh > 1 ? Component.literal("\n").append(Component.translatable("cpmwheel.l2d.shared", sh)) : Component.empty()))).bounds(x2, y2, 106, 18).build();
             lb.active = li != selLink;
             addRenderableWidget(lb); y2 += 20;
         }
@@ -122,21 +125,57 @@ public class Live2dScreen extends Screen {
         if (ch.links.isEmpty()) return;
         final Live2dMath.Link l = ch.links.get(selLink);
         int x3 = 320, w3 = Math.max(150, Math.min(200, width - x3 - 8)), y3 = 26, h3 = (w3 - 2) / 2;
-        addRenderableWidget(Button.builder(Component.translatable("cpmwheel.l2d.anim", font.plainSubstrByWidth(l.anim.isBlank() ? "\u2014" : l.anim, w3 - 60)),
+        int sh = shareCount(l.anim);
+        int aw = sh > 1 ? w3 - 50 : w3;
+        addRenderableWidget(Button.builder(Component.translatable("cpmwheel.l2d.anim", font.plainSubstrByWidth(l.anim.isBlank() ? "\u2014" : l.anim, aw - 50)),
                 b -> minecraft.setScreen(new ValueLayerPickerScreen(this, cfg, l.anim, v -> { l.anim = v; Live2d.reset(); })))
-                .tooltip(tip("cpmwheel.l2d.anim.help")).bounds(x3, y3, w3, 20).build()); y3 += 22;
-        addRenderableWidget(Button.builder(Component.translatable("cpmwheel.l2d.input", Component.translatable("cpmwheel.l2d.in." + l.input)), b -> {
-            List<String> ins = java.util.Arrays.asList(Live2dMath.INPUTS);
-            l.input = ins.get((ins.indexOf(l.input) + 1) % ins.size()); Live2d.reset(); rebuildWidgets(); })
-            .tooltip(Tooltip.create(Component.translatable("cpmwheel.l2d.input.help").append("\n\n").append(Component.translatable("cpmwheel.l2d.in." + l.input + ".help")))).bounds(x3, y3, w3, 20).build()); y3 += 22;
+                .tooltip(tip("cpmwheel.l2d.anim.help")).bounds(x3, y3, aw, 20).build());
+        if (sh > 1) { // 1.7.1 shared layer: how the links combine
+            String mode = cfg.l2dModes.getOrDefault(l.anim, "sum");
+            addRenderableWidget(Button.builder(Component.translatable("cpmwheel.l2d.mode." + mode), b -> {
+                List<String> ms = java.util.Arrays.asList(Live2dMath.MODES);
+                String nm = ms.get((ms.indexOf(mode) + 1) % ms.size());
+                if (nm.equals("sum")) cfg.l2dModes.remove(l.anim); else cfg.l2dModes.put(l.anim, nm);
+                rebuildWidgets(); })
+                .tooltip(Tooltip.create(Component.translatable("cpmwheel.l2d.shared", sh).append("\n\n").append(Component.translatable("cpmwheel.l2d.mode.help"))))
+                .bounds(x3 + w3 - 48, y3, 48, 20).build());
+        }
+        y3 += 22;
+        // 1.7.1 weighted inputs: [source] [weight] [+/−] [✖]
+        for (int k = 0; k < l.inputs.size(); k++) {
+            final Live2dMath.Input in = l.inputs.get(k);
+            int sw = w3 - 40 - 54;
+            addRenderableWidget(Button.builder(Component.literal(font.plainSubstrByWidth(Component.translatable("cpmwheel.l2d.in." + in.src + ".short").getString(), sw - 6)), b -> {
+                List<String> ins = java.util.Arrays.asList(Live2dMath.INPUTS);
+                in.src = ins.get((ins.indexOf(in.src) + 1) % ins.size()); Live2d.reset(); rebuildWidgets(); })
+                .tooltip(Tooltip.create(Component.translatable("cpmwheel.l2d.in." + in.src).append("\n").append(Component.translatable("cpmwheel.l2d.in." + in.src + ".help"))
+                        .append("\n\n").append(Component.translatable("cpmwheel.l2d.input.help")))).bounds(x3, y3, sw, 20).build());
+            addRenderableWidget(new AbstractSliderButton(x3 + sw + 2, y3, 52, 20, Component.literal(in.weight + "%"), in.weight / 300.0) {
+                @Override protected void updateMessage() { setMessage(Component.literal(in.weight + "%")); }
+                @Override protected void applyValue() { in.weight = (int) Math.round(value * 60) * 5; }
+            }).setTooltip(tip("cpmwheel.l2d.inw.help"));
+            addRenderableWidget(Button.builder(Component.literal(in.invert ? "\u2212" : "+"), b -> { in.invert = !in.invert; rebuildWidgets(); })
+                    .tooltip(tip("cpmwheel.l2d.inv.help")).bounds(x3 + sw + 56, y3, 18, 20).build());
+            addRenderableWidget(Button.builder(Component.literal("\u2716"), b -> { l.inputs.remove(in); Live2d.reset(); rebuildWidgets(); })
+                    .bounds(x3 + w3 - 18, y3, 18, 20).build());
+            y3 += 21;
+        }
+        if (l.inputs.size() < 4) {
+            addRenderableWidget(Button.builder(Component.translatable("cpmwheel.l2d.in.add"), b -> {
+                l.inputs.add(new Live2dMath.Input(l.inputs.isEmpty() ? (selLink == 0 ? "headYaw" : "prev") : "bodyYaw", l.inputs.isEmpty() ? 100 : 50, false));
+                Live2d.reset(); rebuildWidgets(); })
+                .tooltip(tip("cpmwheel.l2d.in.add.help")).bounds(x3, y3, w3, 18).build());
+            y3 += 20;
+        }
+        y3 += 2;
         addRenderableWidget(Button.builder(Component.translatable(l.lag ? "cpmwheel.l2d.out.lag" : "cpmwheel.l2d.out.follow"), b -> { l.lag = !l.lag; rebuildWidgets(); })
                 .tooltip(tip("cpmwheel.l2d.out.help")).bounds(x3, y3, h3, 20).build());
         addRenderableWidget(Button.builder(Component.translatable("cpmwheel.l2d.invert", onoff(l.invert)), b -> { l.invert = !l.invert; rebuildWidgets(); })
                 .tooltip(tip("cpmwheel.l2d.invert.help")).bounds(x3 + w3 - h3, y3, h3, 20).build()); y3 += 22;
-        slider(x3, y3, w3, "cpmwheel.l2d.len", 10, 400, 10, () -> l.len, v -> l.len = v, "%"); y3 += 22;
-        slider(x3, y3, w3, "cpmwheel.l2d.weight", 10, 500, 10, () -> l.weight, v -> l.weight = v, "%"); y3 += 22;
-        slider(x3, y3, w3, "cpmwheel.l2d.damp", 0, 100, 5, () -> l.damp, v -> l.damp = v, "%"); y3 += 22;
-        slider(x3, y3, w3, "cpmwheel.l2d.gain", 0, 300, 10, () -> l.gain, v -> l.gain = v, "%"); y3 += 22;
+        slider(x3, y3, h3, "cpmwheel.l2d.len", 10, 400, 10, () -> l.len, v -> l.len = v, "%");
+        slider(x3 + w3 - h3, y3, h3, "cpmwheel.l2d.weight", 10, 500, 10, () -> l.weight, v -> l.weight = v, "%"); y3 += 22;
+        slider(x3, y3, h3, "cpmwheel.l2d.damp", 0, 100, 5, () -> l.damp, v -> l.damp = v, "%");
+        slider(x3 + w3 - h3, y3, h3, "cpmwheel.l2d.gain", 0, 300, 10, () -> l.gain, v -> l.gain = v, "%"); y3 += 22;
         slider(x3, y3, h3, "cpmwheel.l2d.min", -180, 180, 5, () -> l.min, v -> l.min = v, "\u00B0");
         slider(x3 + w3 - h3, y3, h3, "cpmwheel.l2d.max", -180, 180, 5, () -> l.max, v -> l.max = v, "\u00B0"); y3 += 22;
         int third = (w3 - 4) / 3;
@@ -148,6 +187,25 @@ public class Live2dScreen extends Screen {
         ld.active = selLink < ch.links.size() - 1; addRenderableWidget(ld);
         addRenderableWidget(Button.builder(Component.translatable("cpmwheel.l2d.link.del"), b -> { ch.links.remove(l); Live2d.reset(); rebuildWidgets(); })
                 .bounds(x3 + 2 * (third + 2), y3, w3 - 2 * (third + 2), 20).build());
+        liveY = y3 + 24;
+    }
+
+    /** links (in active chains) using this layer */
+    private int shareCount(String anim) {
+        if (anim == null || anim.isBlank()) return 0;
+        int n = 0;
+        for (Live2dMath.Chain c : cfg.l2dChains) if (c.on) for (Live2dMath.Link l : c.links) if (anim.equals(l.anim)) n++;
+        return n;
+    }
+    static Component inputsText(Live2dMath.Link l) {
+        if (l.inputs.isEmpty()) return Component.translatable("cpmwheel.l2d.in.none");
+        net.minecraft.network.chat.MutableComponent m = Component.empty();
+        for (int i = 0; i < l.inputs.size(); i++) {
+            Live2dMath.Input in = l.inputs.get(i);
+            if (i > 0) m.append(" + ");
+            m.append(Component.translatable("cpmwheel.l2d.in." + in.src)).append(" " + (in.invert ? "\u2212" : "") + in.weight + "%");
+        }
+        return m;
     }
 
     private static <T> void move(List<T> l, int i, int d) {
@@ -198,11 +256,15 @@ public class Live2dScreen extends Screen {
         if (!ch.links.isEmpty() && selLink < ch.links.size()) {
             float[] lv = Live2d.live(ch.id, selLink);
             Live2dMath.Link l = ch.links.get(selLink);
-            int x3 = 320, w3 = Math.max(150, Math.min(200, width - x3 - 8)), y3 = 26 + 22 * 9 + 4;
+            int x3 = 320, w3 = Math.max(150, Math.min(200, width - x3 - 8)), y3 = liveY;
+            int sh = shareCount(l.anim);
+            Integer comb = Live2d.combined(l.anim);
+            if (sh > 1 && y3 + 10 < height - 4) g.drawString(font, font.plainSubstrByWidth(Component.translatable("cpmwheel.l2d.shared.live", sh,
+                    Component.translatable("cpmwheel.l2d.mode." + cfg.l2dModes.getOrDefault(l.anim, "sum")), comb == null ? "-" : String.valueOf(comb)).getString(), w3), x3, y3 + 10, 0xFFC04A);
             String held = cfg.l2dPauseTrig && EffectTriggers.held(l.anim) ? " " + Component.translatable("cpmwheel.l2d.paused").getString() : "";
             String txt = lv == null ? Component.translatable("cpmwheel.l2d.live.none").getString()
                     : Component.translatable("cpmwheel.l2d.live", Math.round(lv[0]), lv[1] < 0 ? "-" : String.valueOf((int) lv[1]), lv[2] <= 0 ? "-" : String.valueOf((int) lv[2])).getString() + held;
-            if (y3 < height - 30) g.drawString(font, font.plainSubstrByWidth(txt, w3), x3, y3, 0xCFE8F0);
+            if (y3 < height - 4) g.drawString(font, font.plainSubstrByWidth(txt, w3), x3, y3, 0xCFE8F0);
         }
     }
     @Override public void renderBackground(GuiGraphics g, int mx, int my, float pt) {}

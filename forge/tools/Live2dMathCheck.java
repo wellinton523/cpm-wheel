@@ -92,6 +92,66 @@ public class Live2dMathCheck {
         int rv = Live2dMath.toValue(Live2dMath.output(st[0], 90 * c0.gain / 100f, c0), c0.min, c0.max, 255);
         ok("rest maps to the middle frame (127/128)", rv == 127 || rv == 128);
 
+        // ---------- 1.7.1 multiple inputs ----------
+        java.util.Map<String, Float> src = new java.util.HashMap<>();
+        src.put("headYaw", 40f); src.put("bodyYaw", 20f); src.put("fwd", 10f);
+        Link mi = new Link("headYaw", true).add("bodyYaw", 50, true);
+        ok("weighted sum: 40·100% − 20·50% = 30", near(Live2dMath.drive(mi, src, 0), 30, 0.001f));
+        mi.add("fwd", 200, false);
+        ok("third input adds 10·200% = 50", near(Live2dMath.drive(mi, src, 0), 50, 0.001f));
+        Link pv = new Link("prev", true).add("headYaw", 25, false);
+        ok("prev + head: 7 + 40·25% = 17", near(Live2dMath.drive(pv, src, 7), 17, 0.001f));
+        Link none = new Link(); none.inputs.clear();
+        ok("no inputs = 0", Live2dMath.drive(none, src, 5) == 0);
+        ok("missing source counts 0", near(Live2dMath.drive(new Link("vert", true), src, 0), 0, 0.001f));
+        Link w0 = new Link("headYaw", true); w0.inputs.get(0).weight = 0;
+        ok("weight 0 ignores the input", Live2dMath.drive(w0, src, 0) == 0);
+        // chain with named sources: gain multiplies the whole sum
+        Link gl = new Link("headYaw", false).add("bodyYaw", 100, false); gl.gain = 50; gl.damp = 100;
+        State gs = new State();
+        float[] o1 = new float[1];
+        Live2dMath.stepChain(List.of(gl), new State[]{gs}, src, 0.05f, o1);
+        ok("gain 50% of (40+20) initialises at 30", near(gs.a, 30, 0.001f));
+        // signed body-relative walking
+        float[] r = Live2dMath.bodyRelative(0, 1, 0);          // yaw 0 faces +Z, moving +Z
+        ok("forward is positive (yaw 0)", r[0] > 0.99f && Math.abs(r[1]) < 1e-4f);
+        r = Live2dMath.bodyRelative(0, -1, 0);
+        ok("backward is negative (yaw 0)", r[0] < -0.99f && Math.abs(r[1]) < 1e-4f);
+        r = Live2dMath.bodyRelative(-1, 0, 90);                 // yaw 90 faces −X
+        ok("forward is positive (yaw 90)", r[0] > 0.99f);
+        r = Live2dMath.bodyRelative(1, 0, 90);
+        ok("backward is negative (yaw 90)", r[0] < -0.99f);
+        r = Live2dMath.bodyRelative(-1, 0, 0);                  // facing +Z, right side is −X
+        ok("strafe right is positive", r[1] > 0.99f && Math.abs(r[0]) < 1e-4f);
+        r = Live2dMath.bodyRelative(1, 0, 0);
+        ok("strafe left is negative", r[1] < -0.99f);
+        r = Live2dMath.bodyRelative(0, 1, 180);                 // facing −Z, moving +Z = backward
+        ok("yaw 180: moving +Z is backward", r[0] < -0.99f);
+        r = Live2dMath.bodyRelative(0.3, 0.4, 37);
+        ok("speed is kept (|fwd,side| = |v|)", near((float) Math.hypot(r[0], r[1]), 0.5f, 1e-4f));
+        // ---------- shared layers ----------
+        ok("sum of offsets", Live2dMath.combine(new int[]{148, 138}, new int[]{128, 128}, "sum", 255) == 158);
+        ok("avg of offsets", Live2dMath.combine(new int[]{148, 138}, new int[]{128, 128}, "avg", 255) == 143);
+        ok("max picks the farthest (negative wins)", Live2dMath.combine(new int[]{148, 98}, new int[]{128, 128}, "max", 255) == 98);
+        ok("opposite offsets cancel in sum", Live2dMath.combine(new int[]{158, 98}, new int[]{128, 128}, "sum", 255) == 128);
+        ok("sum clamps high", Live2dMath.combine(new int[]{250, 250}, new int[]{128, 128}, "sum", 255) == 255);
+        ok("sum clamps low", Live2dMath.combine(new int[]{10, 10}, new int[]{128, 128}, "sum", 255) == 0);
+        ok("single link unchanged", Live2dMath.combine(new int[]{77}, new int[]{128}, "sum", 255) == 77);
+        ok("different rests: offsets from each own rest", Live2dMath.combine(new int[]{70, 148}, new int[]{64, 128}, "sum", 255) == 90);
+        ok("unknown mode = sum", Live2dMath.combine(new int[]{148, 138}, new int[]{128, 128}, "x", 255) == 158);
+        // ---------- migration 20 -> 21 ----------
+        Link old = new Link(); old.inputs.clear(); old.input = "bodyYaw";
+        Live2dMath.migrateLink(old);
+        ok("old single input -> one entry at 100%", old.inputs.size() == 1 && old.inputs.get(0).src.equals("bodyYaw") && old.inputs.get(0).weight == 100 && !old.inputs.get(0).invert && old.input.isEmpty());
+        Live2dMath.migrateLink(old);
+        ok("migration is idempotent", old.inputs.size() == 1);
+        Link bad = new Link(); bad.inputs = null; bad.input = "nonsense";
+        Live2dMath.migrateLink(bad);
+        ok("unknown old input -> head yaw", bad.inputs.size() == 1 && bad.inputs.get(0).src.equals("headYaw"));
+        Link keep = new Link("prev", true); keep.input = "walk";
+        Live2dMath.migrateLink(keep);
+        ok("existing list is kept", keep.inputs.size() == 1 && keep.inputs.get(0).src.equals("prev"));
+
         System.out.println((fails == 0 ? "ALL OK " : "FAILED ") + (n - fails) + "/" + n);
         if (fails > 0) System.exit(1);
     }

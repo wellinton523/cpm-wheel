@@ -16,12 +16,27 @@ import java.util.List;
 public final class Live2dMath {
     private Live2dMath() {}
 
-    public static final String[] INPUTS = {"headYaw", "headPitch", "bodyYaw", "walk", "vert", "prev"};
+    /** input sources: angles in degrees, speeds as 10° per block/s; "prev" = the previous link's angle */
+    public static final String[] INPUTS = {"headYaw", "headPitch", "bodyYaw", "headRel", "walk", "fwd", "side", "vert", "prev"};
+    /** how links sharing one CPM layer are combined */
+    public static final String[] MODES = {"sum", "avg", "max"};
+
+    /** 1.7.1: one weighted input of a link (Live2D style: the link is driven by the weighted sum of its inputs) */
+    public static class Input {
+        public String src = "headYaw";
+        public int weight = 100;           // % (0..300)
+        public boolean invert = false;
+        public Input() {}
+        public Input(String src, int weight, boolean invert) { this.src = src; this.weight = weight; this.invert = invert; }
+    }
 
     /** one link (also the stored config object) */
     public static class Link {
         public String anim = "";           // CPM value layer
-        public String input = "headYaw";
+        /** 1.7.0 single input (read from old configs, moved into inputs by migrateLink) */
+        public String input = "";
+        /** 1.7.1 weighted inputs */
+        public List<Input> inputs = new ArrayList<>();
         public int len = 100;              // % (10..400): longer = softer, slower swing
         public int weight = 100;           // % (10..500): heavier = more inertia
         public int damp = 30;              // % of critical damping (0..100): low = bouncy
@@ -30,7 +45,8 @@ public final class Live2dMath {
         public boolean invert = false;
         public boolean lag = true;         // true = "atraso" (a − x), false = "segue" (a)
         public Link() {}
-        public Link(String input, boolean lag) { this.input = input; this.lag = lag; }
+        public Link(String input, boolean lag) { inputs.add(new Input(input, 100, false)); this.lag = lag; }
+        public Link add(String src, int weight, boolean invert) { inputs.add(new Input(src, weight, invert)); return this; }
     }
 
     /** one chain ("Cabelo", "Cauda"…) */
@@ -79,6 +95,64 @@ public final class Live2dMath {
     }
 
     /**
+     * 1.7.1 signed movement relative to the BODY facing (Minecraft yaw: 0 = +Z, 90 = −X):
+     * {forward (+ forward, − backward), side (+ right, − left)} in the same units as vx / vz.
+     */
+    public static float[] bodyRelative(double vx, double vz, float bodyYawDeg) {
+        double r = Math.toRadians(bodyYawDeg);
+        double fx = -Math.sin(r), fz = Math.cos(r);   // forward
+        double rx = -Math.cos(r), rz = -Math.sin(r);  // right
+        return new float[]{(float) (vx * fx + vz * fz), (float) (vx * rx + vz * rz)};
+    }
+
+    /** config 20 -> 21: the single input becomes a one-entry list at 100 % */
+    public static void migrateLink(Link l) {
+        if (l.inputs == null) l.inputs = new ArrayList<>();
+        if (l.inputs.isEmpty() && l.input != null && !l.input.isBlank())
+            l.inputs.add(new Input(java.util.Arrays.asList(INPUTS).contains(l.input) ? l.input : "headYaw", 100, false));
+        l.input = "";
+    }
+
+    /** weighted sum of the link's inputs (before the link's own intensity); prevA = the previous link's angle */
+    public static float drive(Link l, java.util.Map<String, Float> src, float prevA) {
+        float x = 0;
+        if (l.inputs == null) return 0;
+        for (Input in : l.inputs) {
+            if (in == null) continue;
+            float v = "prev".equals(in.src) ? prevA : src == null ? 0 : src.getOrDefault(in.src, 0f);
+            x += v * clamp(in.weight, 0, 300) / 100f * (in.invert ? -1 : 1);
+        }
+        return x;
+    }
+
+    /** steps a whole chain with named input sources; out[i] = output angle */
+    public static float[] stepChain(List<Link> links, State[] st, java.util.Map<String, Float> src, float dt, float[] out) {
+        for (int i = 0; i < links.size(); i++) {
+            Link p = links.get(i);
+            float x = drive(p, src, i == 0 ? 0 : st[i - 1].a) * clamp(p.gain, 0, 300) / 100f;
+            step(st[i], x, p, dt);
+            out[i] = output(st[i], x, p);
+        }
+        return out;
+    }
+
+    /**
+     * 1.7.1 several links on one layer: combine their offsets from the rest value.
+     * sum = rest + Σ offsets, avg = rest + mean, max = the offset farthest from rest; clamped to 0..maxValue.
+     */
+    public static int combine(int[] values, int[] rests, String mode, int maxValue) {
+        if (values.length == 0) return 0;
+        int rest = rests[0];
+        float r;
+        switch (mode == null ? "sum" : mode) {
+            case "avg" -> { float t = 0; for (int i = 0; i < values.length; i++) t += values[i] - rests[i]; r = rest + t / values.length; }
+            case "max" -> { int best = 0; for (int i = 0; i < values.length; i++) { int o = values[i] - rests[i]; if (Math.abs(o) > Math.abs(best)) best = o; } r = rest + best; }
+            default -> { float t = 0; for (int i = 0; i < values.length; i++) t += values[i] - rests[i]; r = rest + t; }
+        }
+        return Math.round(clamp(r, 0, Math.max(0, maxValue)));
+    }
+
+    /**
      * Steps a whole chain. ext[i] = the body input of link i in degrees (ignored for "prev");
      * out[i] = the output angle. Returns out.
      */
@@ -86,7 +160,9 @@ public final class Live2dMath {
         for (int i = 0; i < links.size(); i++) {
             Link p = links.get(i);
             float g = clamp(p.gain, 0, 300) / 100f;
-            float x = "prev".equals(p.input) ? (i == 0 ? 0 : st[i - 1].a) * g : ext[i] * g;
+            java.util.Map<String, Float> m = new java.util.HashMap<>();
+            for (String k : INPUTS) m.put(k, ext[i]);  // test helper: every source reads ext[i]
+            float x = drive(p, m, i == 0 ? 0 : st[i - 1].a) * g;
             step(st[i], x, p, dt);
             out[i] = output(st[i], x, p);
         }
