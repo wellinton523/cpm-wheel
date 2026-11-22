@@ -60,6 +60,7 @@ public class CpmWheel {
         MinecraftForge.EVENT_BUS.addListener((net.minecraftforge.client.event.RenderGuiEvent.Post e) -> LookOverlay.render(e.getGuiGraphics())); // 1.8.3 look-at debug overlay (off by default)
         MinecraftForge.EVENT_BUS.addListener((net.minecraftforge.client.event.RenderGuiEvent.Post e) -> EyeOverlay.render(e.getGuiGraphics())); // 1.8.4 eye-aim overlay (off by default)
         MinecraftForge.EVENT_BUS.addListener((net.minecraftforge.client.event.RegisterClientCommandsEvent e) -> e.getDispatcher().register(ProfileCommand.build())); // 1.9.0 /cpmwheel perfil ...
+        MinecraftForge.EVENT_BUS.addListener((net.minecraftforge.client.event.RegisterClientCommandsEvent e) -> e.getDispatcher().register(HandsCommand.build())); // 1.9.1 /cpmwheel mod <id> maos ...
     }
 
     private void keys(RegisterKeyMappingsEvent e) {

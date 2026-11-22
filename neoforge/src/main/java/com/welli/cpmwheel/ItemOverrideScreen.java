@@ -96,7 +96,7 @@ public class ItemOverrideScreen extends Screen {
             case "mod" -> {
                 TreeSet<String> ns = new TreeSet<>();
                 for (ResourceLocation rl : BuiltInRegistries.ITEM.keySet()) ns.add(rl.getNamespace());
-                for (String n : ns) if (q.isEmpty() || n.contains(q)) results.add(n);
+                for (String n : ns) if (q.isEmpty() || n.contains(q) || ModPickerScreen.modName(n).toLowerCase(Locale.ROOT).contains(q)) results.add(n);   // 1.9.1: display name too
             }
             case "group" -> {
                 for (WheelConfig.ItemGroup g : cfg.haGroups) {
@@ -137,7 +137,27 @@ public class ItemOverrideScreen extends Screen {
             String l = g == null ? r : g.label() + (g.mod.isBlank() ? "" : " (" + g.mod + ")");
             return (hasAny("grp:" + r) ? "\u2605 " : "") + (SameHands.on(cfg, "grp:" + r) ? "\u21C6 " : "") + l;
         }
-        return (hasAny(prefix() + r) ? "\u2605 " : "") + (SameHands.on(cfg, prefix() + r) ? "\u21C6 " : "") + r;
+        return (hasAny(prefix() + r) ? "\u2605 " : "") + (SameHands.on(cfg, prefix() + r) ? "\u21C6 " : "") + handsMark(r) + r;
+    }
+
+    // ---------- 1.9.1 hand animations off per mod / item ----------
+    private String handsKey(String r) { return mode.equals("mod") ? HandsOff.modKey(r) : r; }
+    /** row marker: animations off (both / one hand) or an item forced back on */
+    private String handsMark(String r) {
+        if (mode.equals("group")) return "";
+        int st = HandsOff.state(cfg.haHandsOff, handsKey(r));
+        return st == HandsOff.BOTH ? "\u2716 " : st > 0 ? "\u00BD\u2716 " : (st == 0 && !mode.equals("mod")) ? "\u2714 " : "";
+    }
+    private Component handsLabel() {
+        String k = handsKey(target);
+        int st = HandsOff.state(cfg.haHandsOff, k);
+        Component s = Component.translatable("cpmwheel.hoff.st." + HandsOff.word(st));
+        if (st == -1) {   // item inherits: show what its mod says
+            int c = target.indexOf(':');
+            int ms = c < 0 ? 0 : HandsOff.state(cfg.haHandsOff, HandsOff.modKey(target.substring(0, c)));
+            s = Component.translatable("cpmwheel.hoff.st.inherit", Component.translatable("cpmwheel.hoff.st." + HandsOff.word(ms)));
+        }
+        return Component.translatable("cpmwheel.hoff.btn", s);
     }
 
     @Override
@@ -217,6 +237,15 @@ public class ItemOverrideScreen extends Screen {
                 .tooltip(Tooltip.create(Component.translatable("cpmwheel.phys.btn.help"))).bounds(x2 + 98, ry, 52, 20).build();
         phys.active = !target.isEmpty();
         addRenderableWidget(phys); ry += 46;
+        if (!target.isEmpty() && !mode.equals("group")) {   // 1.9.1: "Animações da mão" for this mod / item (in the gap under the title lines)
+            addRenderableWidget(Button.builder(handsLabel(), b -> {
+                String k = handsKey(target);
+                HandsOff.set(cfg.haHandsOff, k, HandsOff.next(HandsOff.state(cfg.haHandsOff, k), mode.equals("mod")));
+                HandAnim.load(cfg); rebuildWidgets(); })
+                .tooltip(Tooltip.create(Component.translatable(mode.equals("mod") ? "cpmwheel.hoff.help.mod" : "cpmwheel.hoff.help.item")))
+                .bounds(x2, ry - 2, 150, 20).build());
+            ry += 20;
+        }
         srcLine = Component.empty(); groupsLine = Component.empty();
         if (!target.isEmpty()) {
             int[] own = cfg.haItem.get(key());

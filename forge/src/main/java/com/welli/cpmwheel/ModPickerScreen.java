@@ -30,7 +30,7 @@ public class ModPickerScreen extends Screen {
         for (ResourceLocation rl : BuiltInRegistries.ITEM.keySet()) mods.merge(rl.getNamespace(), 1, Integer::sum);
     }
 
-    private String modName(String ns) {
+    static String modName(String ns) {
         try { return net.minecraftforge.fml.ModList.get().getModContainerById(ns).map(c -> c.getModInfo().getDisplayName()).orElse(ns); } catch (Throwable t) { return ns; }
     }
 

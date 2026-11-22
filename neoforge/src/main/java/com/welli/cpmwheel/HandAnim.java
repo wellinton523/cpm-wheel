@@ -63,6 +63,22 @@ public final class HandAnim {
         am[0] = c.arm("main").clone(); am[1] = c.arm("off").clone(); // 1.8.0: missing = new default
         arm = am;
         if (!c.haIgnore.equals(ignored)) { ignored = java.util.List.copyOf(c.haIgnore); recompute(true); }
+        HANDS_OFF = c.haHandsOff == null || c.haHandsOff.isEmpty() ? java.util.Map.of() : java.util.Map.copyOf(c.haHandsOff);
+    }
+
+    // ---- 1.9.1 hand animations off per mod / item ----
+    static volatile java.util.Map<String, Integer> HANDS_OFF = java.util.Map.of();
+    /** per hand blend weight of our animations (1 = on, 0 = off), eased so switching never snaps */
+    private static final float[] handW = {1, 1};
+    /** are CPM Wheel's hand animations turned off for this hand by the held item's mod / item entry? */
+    static boolean handOff(ItemStack stack, InteractionHand hand) {
+        if (stack == null || stack.isEmpty() || HANDS_OFF.isEmpty()) return false;
+        net.minecraft.resources.ResourceLocation rl = net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(stack.getItem());
+        return HandsOff.off(HandsOff.mask(HANDS_OFF, rl.toString(), rl.getNamespace()), hand == InteractionHand.MAIN_HAND);
+    }
+    public static boolean handOffNow(InteractionHand hand) {
+        LocalPlayer p = Minecraft.getInstance().player;
+        return p != null && handOff(p.getItemInHand(hand), hand);
     }
     static int fi(String f) { for (int i = 0; i < FEATURES.length; i++) if (FEATURES[i].equals(f)) return i; return -1; }
     static boolean f(int i) { return on[i] && !blocked[i]; }
@@ -207,6 +223,12 @@ public final class HandAnim {
         swimPhase = (swimPhase + dt * (0.45f + (float) mv.length() * 6f)) % 1f;
         climbPhase = (climbPhase + dt * (0.5f + (float) Math.abs(mv.y) * 12f)) % 1f;
         // per-hand category pose blend
+        for (int hi = 0; hi < 2; hi++) {   // 1.9.1: ease the per-mod on/off weight (~0.15 s)
+            InteractionHand hh = hi == 0 ? InteractionHand.MAIN_HAND : InteractionHand.OFF_HAND;
+            float goal = handOff(p.getItemInHand(hh), hh) ? 0 : 1;
+            handW[hi] += (goal - handW[hi]) * (1 - (float) Math.exp(-dt * 14));
+            if (Math.abs(goal - handW[hi]) < 0.002f) handW[hi] = goal;
+        }
         for (int hi = 0; hi < 2; hi++) {
             float[] tgt = target(p, hi == 0 ? InteractionHand.MAIN_HAND : InteractionHand.OFF_HAND);
             float kp = 1 - (float) Math.exp(-dt * 7);
@@ -245,9 +267,13 @@ public final class HandAnim {
             PoseStack.Pose last = ps.last();
             if (savedFor == last && savedFrame == frame) { last.pose().set(savedPose); last.normal().set(savedNormal); }
             else { savedPose.set(last.pose()); savedNormal.set(last.normal()); savedFor = last; savedFrame = frame; }
-            // arm position adjust: always applies, even with the other hand animations off
-            armAdjust(ps, hand == InteractionHand.MAIN_HAND, (hand == InteractionHand.MAIN_HAND) == (p.getMainArm() == HumanoidArm.RIGHT) ? 1 : -1, stack.isEmpty() ? null : stack.getItem());
+            int hiW = hand == InteractionHand.MAIN_HAND ? 0 : 1;
+            boolean modOff = handOff(stack, hand);
+            float W = handW[hiW];
+            // arm position adjust: always applies, even with the other hand animations off (1.9.1: not for a per-mod "off" hand, faded)
+            armAdjust(ps, hand == InteractionHand.MAIN_HAND, (hand == InteractionHand.MAIN_HAND) == (p.getMainArm() == HumanoidArm.RIGHT) ? 1 : -1, stack.isEmpty() ? null : stack.getItem(), modOff || W < 1 ? W : 1f);
             if (!master || allBlocked || failed || Float.isNaN(sYaw)) return false;
+            if (modOff && W <= 0.002f) return false;       // 1.9.1: off for this mod / item -> vanilla / CPM hand, untouched
             if (!loggedFirst) { loggedFirst = true; LOG.info("[cpmwheel] hand animations: stage 4 transforms applied (first frame)"); }
 
             boolean right = (hand == InteractionHand.MAIN_HAND) == (p.getMainArm() == HumanoidArm.RIGHT);
@@ -291,15 +317,17 @@ public final class HandAnim {
             }
             if (f(9)) {
                 // both arms: the empty off-hand arm is not drawn by vanilla, so the main-hand pass draws it too
-                if ((swimW > 0.05f || climbW > 0.05f) && hand == InteractionHand.MAIN_HAND && p.getOffhandItem().isEmpty() && buf != null && !p.isInvisible()) {
+                if (!modOff && (swimW > 0.05f || climbW > 0.05f) && hand == InteractionHand.MAIN_HAND && p.getOffhandItem().isEmpty() && buf != null && !p.isInvisible()) {
                     ps.pushPose(); restoreSaved(ps); armAdjust(ps, false, -side); stroke(ps, -side, G); armChain(ps, -side, 0, 0); drawArm(ps, p, buf, light, !right); ps.popPose();
                 }
-                stroke(ps, side, G);
+                stroke(ps, side, G * W);
             }
+            if (W < 1) { tx *= W; ty *= W; tz *= W; rx *= W; ry *= W; rz *= W; }   // 1.9.1: fading in / out
             if (tx != 0 || ty != 0 || tz != 0) ps.translate(tx, ty, tz);
             if (ry != 0) ps.mulPose(Axis.YP.rotationDegrees(ry));
             if (rx != 0) ps.mulPose(Axis.XP.rotationDegrees(rx));
             if (rz != 0) ps.mulPose(Axis.ZP.rotationDegrees(rz));
+            if (modOff) return false;                       // fading out: the item stays vanilla-drawn
             return heldExtras(ps, p, hand, stack, swing, equip, buf, light, right);
         } catch (Throwable th) {
             if (!loggedErr) { loggedErr = true; LOG.warn("[cpmwheel] hand animation error (disabled for this session)", th); }
@@ -312,6 +340,7 @@ public final class HandAnim {
     /** 1.5.7 world-pass arm: can this hand be drawn completely by us (arm + item), outside the vanilla hand pass? */
     static boolean worldOk(LocalPlayer p, InteractionHand hand, ItemStack stack) {
         if (allBlocked || failed) return false;
+        if (handOff(stack, hand)) return false;                           // 1.9.1: off for this mod / item
         if (stack.isEmpty()) return hand == InteractionHand.MAIN_HAND;   // empty main hand: vanilla arm chain (always ours)
         if (!master || Float.isNaN(sYaw) || !f(10) || vanillaItem || p.isInvisible()) return false;
         Item it = stack.getItem();
@@ -353,18 +382,21 @@ public final class HandAnim {
     /** view-space arm adjust around the vanilla hand area so rotations/scale stay local; mirrored for the left arm */
     static void armAdjust(PoseStack ps, boolean main, float side) { armAdjust(ps, main, side, null); }
     /** global arm adjust + per-item/per-mod arm override for the held item (priority item > mod) */
-    static void armAdjust(PoseStack ps, boolean main, float side, Item held) {
+    static void armAdjust(PoseStack ps, boolean main, float side, Item held) { armAdjust(ps, main, side, held, 1f); }
+    /** 1.9.1: w = weight (0 = no adjust, used while a per-mod "off" fades the hand back to vanilla) */
+    static void armAdjust(PoseStack ps, boolean main, float side, Item held, float w) {
+        if (w <= 0.002f) return;
         int[] a = arm[main ? 0 : 1];
         int[] o = held != null && itemOverrides ? pick(ITEM_ARM, MOD_ARM, held, main ? 0 : 1) : null;
         if (o != null) { a = a.clone(); for (int q = 0; q < 7; q++) a[q] += o[q]; }
         boolean any = false; for (int v : a) if (v != 0) { any = true; break; }
         if (!any) return;
         float px = side * 0.6f, py = -0.55f, pz = -0.9f;
-        ps.translate(px + side * a[0] / 100f, py + a[1] / 100f, pz + a[2] / 100f);
-        if (a[4] != 0) ps.mulPose(Axis.YP.rotationDegrees(side * a[4]));
-        if (a[3] != 0) ps.mulPose(Axis.XP.rotationDegrees(a[3]));
-        if (a[5] != 0) ps.mulPose(Axis.ZP.rotationDegrees(side * a[5]));
-        float sc = Math.max(0.2f, 1 + a[6] / 100f);
+        ps.translate(px + side * a[0] * w / 100f, py + a[1] * w / 100f, pz + a[2] * w / 100f);
+        if (a[4] != 0) ps.mulPose(Axis.YP.rotationDegrees(side * a[4] * w));
+        if (a[3] != 0) ps.mulPose(Axis.XP.rotationDegrees(a[3] * w));
+        if (a[5] != 0) ps.mulPose(Axis.ZP.rotationDegrees(side * a[5] * w));
+        float sc = Math.max(0.2f, 1 + a[6] * w / 100f);
         if (sc != 1) ps.scale(sc, sc, sc);
         ps.translate(-px, -py, -pz);
     }

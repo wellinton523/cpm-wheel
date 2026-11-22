@@ -2,7 +2,7 @@
 
 # CPM Wheel
 
-![versão](https://img.shields.io/badge/vers%C3%A3o-1.9.0-2ee6ff)
+![versão](https://img.shields.io/badge/vers%C3%A3o-1.9.1-2ee6ff)
 ![NeoForge 1.21.1](https://img.shields.io/badge/NeoForge-1.21.1%20(21.1.x)-orange)
 ![Forge 1.20.1](https://img.shields.io/badge/Forge-1.20.1%20(47.x)-blue)
 ![lado](https://img.shields.io/badge/lado-cliente-lightgrey)
@@ -32,6 +32,7 @@ Autor: **Zeraph**. Mod só de cliente: o servidor não precisa ter.
 - [Novidades da 1.8.0](#novidades-da-180)
 - [Emotecraft (1.8.1)](#emotecraft-181)
 - [Olhar e piscar (1.8.3)](#olhar-e-piscar-183)
+- [Novidades da 1.9.1](#novidades-da-191)
 - [Novidades da 1.9.0](#novidades-da-190)
 - [Guia rápido: Física Live2D (cabelo)](#guia-rápido-física-live2d-cabelo)
 - [Configuração e teclas](#configuração-e-teclas)
@@ -251,6 +252,12 @@ Integração **opcional** com o [Emotecraft](https://modrinth.com/mod/emotecraft
 
 ---
 
+## Novidades da 1.9.1
+
+- **Animações da mão por mod:** Configurações › "Animações da mão (detalhes)…" › "Itens e mods..." › "Modo: mod inteiro" › escolha o mod › "Anim. mãos: ON / OFF / OFF princ. / OFF secund.". Cada mão é avaliada pelo item que segura; desligado = desenho normal do Minecraft/CPM, com transição suave. No modo "item" dá para abrir exceções. Comando: `/cpmwheel mod <modid> maos on|off|principal|secundaria`, `/cpmwheel item <id> maos ...|herdar`, `/cpmwheel maos lista`. Padrão: tudo ligado (igual antes).
+
+---
+
 ## Novidades da 1.9.0
 
 Tudo **desligado por padrão**; cada recurso tem a própria chave.
@@ -340,6 +347,7 @@ Notas completas em cada [release](https://github.com/wellinton523/cpm-wheel/rele
 
 | Versão | Destaques |
 |---|---|
+| [1.9.1](https://github.com/wellinton523/cpm-wheel/releases/tag/v1.9.1) | Animações da mão desligáveis por mod e por item (mão principal/secundária separadas), com comando |
 | [1.9.0](https://github.com/wellinton523/cpm-wheel/releases/tag/v1.9.0) | Overlay dos olhos; olhadinhas, reação a dano, olhar itens/blocos/mobs, modo ocioso; piscar por contexto; exportar/importar perfis (botões e comando) |
 | [1.8.3](https://github.com/wellinton523/cpm-wheel/releases/tag/v1.8.3) | Olhar: área na tela (padrão), nunca a câmera livre, filtros de invisíveis/vanish/linha de visão, manter alvo, olhos suavizados; piscar suave com curva, piscada dupla e camadas extras |
 | [1.8.2](https://github.com/wellinton523/cpm-wheel/releases/tag/v1.8.2) | Emotecraft: ícones e informações dos emotes na lista, ícone do emote na roda e no HUD |
@@ -408,6 +416,7 @@ Notas completas em cada [release](https://github.com/wellinton523/cpm-wheel/rele
   - "Disable when" conditions with fades.
   - 1.8.0: live preview, wind, impacts, look-at, voice (Simple Voice Chat), animation-driven input, breathing/blinking, soft limits, mirroring, presets.
 - 1.8.0: quick emote keys, chained animations, automatic per-model profiles. All new features are off by default.
+- 1.9.1: first-person hand animations can be turned off per mod (namespace) or per item, per hand, with a smooth fade (Settings › Hand animations › Items and mods, mode "mod"), plus `/cpmwheel mod <modid> maos on|off|principal|secundaria`. Default unchanged.
 - 1.9.0 (all off by default): eye-aim HUD overlay (no names ever; a small gauge in freecam/F5), intentional glances at newly appeared targets, damage reaction (squint + quick look at an eligible attacker), context blink rate (sun, underwater, rain/sand, aiming), look at the mined block / dropped items / mobs when no player is around, idle wander with sleepy blinks, and profile export/import (UI + `/cpmwheel perfil ...`, validated, never overwrites without confirmation, automatic backup).
 - 1.8.3: look-at picks the target inside a screen area around the centre of your own view (default; "nearest" kept), never the free camera (Freecam/Flashback/ReplayMod/F5/spectating), skips invisible, spectator, off-tab-list, vanish-tagged and out-of-sight entities; stickiness, smoothed eyes (critically damped spring, max speed, saccades, return delay); smooth blink (close/hold/open, curve, double blink, extra layers).
 - 1.8.2: Emotecraft emote icons and details in the picker; the emote icon on the wheel slice (default) and in the HUD.

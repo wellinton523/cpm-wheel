@@ -293,7 +293,7 @@ public class WheelConfig {
     public String centerMode = "player";
     /** center size in percent (50-200) */
     public int centerSize = 100;
-    public int configVersion = 27;
+    public int configVersion = 28;
     /** 1.6.0 global switches: extra trigger conditions, timed transitions, custom sounds (per-button / per-rule sounds) */
     public boolean trigCondsOn = true, trigTransOn = true, customSounds = true;
     /** 1.7.0 "Física Live2D": chains of CPM value layers driven by spring physics */
@@ -383,6 +383,8 @@ public class WheelConfig {
     public List<String> handAnimOff = new ArrayList<>();
     /** 1.5.2: other mods whose compat rules are ignored (HandAnim.MODS keys) */
     public List<String> haIgnore = new ArrayList<>();
+    /** 1.9.1: hand animations OFF per mod ("mod:<ns>") or item ("<ns>:<item>"): mask 1 = main hand, 2 = off hand, 3 = both; item 0 = forced on */
+    public java.util.Map<String, Integer> haHandsOff = new java.util.LinkedHashMap<>();
     /** 1.5.3: item in the fist: per-category user offsets {x,y,z,scale,rx,ry,rz}, vanilla item position fallback, blocks with 1 or 2 hands */
     public java.util.Map<String, int[]> haAdj = new java.util.HashMap<>();
     public boolean haVanillaItem = false;
@@ -569,6 +571,8 @@ public class WheelConfig {
                 // 1.9.0: glances, damage reaction, context blink, objects, idle: all off until turned on
                 c.l2dGlanceOn = c.l2dHurtOn = c.l2dCtxOn = c.l2dObjOn = c.l2dIdleOn = false; c.l2dHurtSnap = true;
                 c.l2dObjItems = c.l2dObjMining = c.l2dObjMobs = true; c.l2dObjOrder = "mining,items,mobs"; }
+            if (c.configVersion < 28) { c.configVersion = 28; // 1.9.1: hand animations per mod/item, nothing turned off (same as before)
+                c.haHandsOff = new java.util.LinkedHashMap<>(); }
             c.fixup();
             if (c.centerMode == null || c.centerMode.isBlank()) c.centerMode = "player";
             if (c.hudCorner == null || c.hudCorner.isBlank()) c.hudCorner = "top_left";
@@ -629,6 +633,9 @@ public class WheelConfig {
         haWorldDepth = haWorldDepth <= 0 ? 40 : Math.max(20, Math.min(100, haWorldDepth));
         if (handAnimOff == null) handAnimOff = new ArrayList<>();
         if (haIgnore == null) haIgnore = new ArrayList<>();
+        if (haHandsOff == null) haHandsOff = new java.util.LinkedHashMap<>();
+        haHandsOff.entrySet().removeIf(e -> e.getValue() == null || !HandsOff.validKey(e.getKey()) || (e.getKey().startsWith("mod:") && (e.getValue() & 3) == 0));
+        haHandsOff.replaceAll((k, v) -> v & 3);
         if (haAdj == null) haAdj = new java.util.HashMap<>();
         if (haFlat == null) haFlat = new ArrayList<>();
         if (haItem == null) haItem = new java.util.HashMap<>();
