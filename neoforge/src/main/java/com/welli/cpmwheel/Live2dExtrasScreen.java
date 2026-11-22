@@ -26,8 +26,7 @@ public class Live2dExtrasScreen extends MiniScreen {
         btn("cpmwheel.l2d.ext.impact", b -> { cfg.l2dImpactOn = !cfg.l2dImpactOn; rebuildWidgets(); }, x, y, w, "cpmwheel.l2d.ext.impact.help", onoff(cfg.l2dImpactOn)); y += 22;
         slider(x, y, w, "cpmwheel.l2d.ext.impactpct", 0, 300, 10, () -> cfg.l2dImpactPct, v -> cfg.l2dImpactPct = v, "%", "cpmwheel.l2d.ext.impact.help"); y += 24;
         btn("cpmwheel.l2d.ext.look", b -> { cfg.l2dLookOn = !cfg.l2dLookOn; rebuildWidgets(); }, x, y, w, "cpmwheel.l2d.ext.look.help", onoff(cfg.l2dLookOn)); y += 22;
-        slider(x, y, w, "cpmwheel.l2d.ext.radius", 2, 32, 1, () -> cfg.l2dLookRadius, v -> cfg.l2dLookRadius = v, "", "cpmwheel.l2d.ext.look.help"); y += 22;
-        btn(cfg.l2dLookPlayers ? "cpmwheel.l2d.ext.players" : "cpmwheel.l2d.ext.mobs", b -> { cfg.l2dLookPlayers = !cfg.l2dLookPlayers; rebuildWidgets(); }, x, y, w, "cpmwheel.l2d.ext.look.help"); y += 24;
+        btn("cpmwheel.look.open", b -> minecraft.setScreen(new LookScreen(this, cfg)), x, y, w, "cpmwheel.look.open.help"); y += 24;
         btn("cpmwheel.l2d.ext.voice", b -> { cfg.l2dVoiceOn = !cfg.l2dVoiceOn; rebuildWidgets(); }, x, y, w, "cpmwheel.l2d.ext.voice.help", onoff(cfg.l2dVoiceOn)); y += 22;
         slider(x, y, w, "cpmwheel.l2d.ext.voicepct", 0, 300, 10, () -> cfg.l2dVoicePct, v -> cfg.l2dVoicePct = v, "%", "cpmwheel.l2d.ext.voice.help"); y += 22;
         voiceY = y; y += 12;
@@ -60,7 +59,7 @@ public class Live2dExtrasScreen extends MiniScreen {
             slider(x3, y, w3, "cpmwheel.l2d.gen.lo", 0, 100, 5, () -> g.lo, v -> g.lo = v, "%", "cpmwheel.l2d.gen.range.help"); y += 22;
             slider(x3, y, w3, "cpmwheel.l2d.gen.hi", 0, 100, 5, () -> g.hi, v -> g.hi = v, "%", "cpmwheel.l2d.gen.range.help"); y += 22;
             slider(x3, y, w3, "cpmwheel.l2d.gen.rand", 0, 100, 5, () -> g.rand, v -> g.rand = v, "%", "cpmwheel.l2d.gen.rand.help"); y += 22;
-            if (blink) { slider(x3, y, w3, "cpmwheel.l2d.gen.pulse", 50, 1000, 10, () -> g.pulseMs, v -> g.pulseMs = v, " ms", "cpmwheel.l2d.gen.blink.help"); y += 22; }
+            btn(blink ? "cpmwheel.blink.open.btn" : "cpmwheel.blink.open.btn2", b -> minecraft.setScreen(new BlinkScreen(this, cfg, g)), x3, y, w3, "cpmwheel.blink.more.help"); y += 22;
             btn("cpmwheel.l2d.gen.del", b -> { cfg.l2dGens.remove(g); selGen = ""; Live2d.reset(); rebuildWidgets(); }, x3, y, w3, null); y += 22;
         }
         btn(Component.translatable("gui.done"), b -> onClose(), 8, height - 26, 150, 20, null);
@@ -69,8 +68,8 @@ public class Live2dExtrasScreen extends MiniScreen {
     private void add(String kind) {
         Live2dMath.Gen g = new Live2dMath.Gen();
         g.id = WheelConfig.newId("g"); g.kind = kind;
-        if (kind.equals("blink")) { g.periodMs = 4000; g.rand = 40; g.lo = 0; g.hi = 100; g.pulseMs = 150; }
-        else { g.periodMs = 3500; g.rand = 15; g.lo = 0; g.hi = 100; }
+        if (kind.equals("blink")) { g.periodMs = 4000; g.rand = 40; g.lo = 0; g.hi = 100; g.pulseMs = 150; g.closeMs = 100; g.holdMs = 60; g.openMs = 140; g.curve = "smooth"; g.doubleChance = 10; }
+        else { g.periodMs = 3500; g.rand = 15; g.lo = 0; g.hi = 100; g.closeMs = 100; g.holdMs = 60; g.openMs = 140; }
         cfg.l2dGens.add(g); selGen = g.id; rebuildWidgets();
     }
 

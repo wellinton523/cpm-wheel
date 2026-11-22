@@ -347,10 +347,49 @@ public final class Live2dMath {
         public int lo = 0, hi = 100;
         /** random variation of period / amplitude (%) */
         public int rand = 15;
-        /** blink: how long the eye is closed (ms) */
+        /** blink: how long the eye is closed (ms); 1.8.3: only used to fill close/hold/open of configs from before 1.8.3 */
         public int pulseMs = 150;
+        /** 1.8.3 smooth blink: closing, closed (hold) and opening times (ms; close < 0 = derive from pulseMs), easing curve,
+         *  chance (%) of a quick second blink, extra layers moved by the same generator (e.g. the other eyelid) */
+        public int closeMs = -1, holdMs = -1, openMs = -1;
+        public String curve = "smooth";
+        public int doubleChance = 0;
+        public java.util.List<String> more = new java.util.ArrayList<>();
     }
-    public static final class GenState { public double phase; public float amp = 1, mul = 1, t, next = -1, pulse = -1; }
+    public static final class GenState { public double phase; public float amp = 1, mul = 1, t, next = -1, pulse = -1; public boolean second; }
+
+    // ---------- 1.8.3 smooth blink ----------
+    public static final String[] CURVES = {"smooth", "sine", "quick", "linear"};
+    public static String curve(String c) { for (String k : CURVES) if (k.equals(c)) return k; return "smooth"; }
+    /** easing 0..1 -> 0..1: smooth = smoothstep, sine = cosine, quick = fast start / soft end (cubic out), linear */
+    public static float ease(String curve, float t) {
+        t = clamp(t, 0, 1);
+        switch (curve == null ? "smooth" : curve) {
+            case "linear": return t;
+            case "sine": return (float) (0.5 - 0.5 * Math.cos(Math.PI * t));
+            case "quick": { float u = 1 - t; return 1 - u * u * u; }
+            default: return t * t * (3 - 2 * t);
+        }
+    }
+    /** {close, hold, open} in ms (configs from before 1.8.3: 30 / 40 / 30 % of the old "eye closed" time) */
+    public static int[] blinkTimes(Gen g) {
+        if (g.closeMs < 0 || g.holdMs < 0 || g.openMs < 0) {
+            int p = Math.max(50, g.pulseMs);
+            return new int[]{Math.round(p * 0.3f), Math.round(p * 0.4f), Math.round(p * 0.3f)};
+        }
+        return new int[]{Math.max(0, g.closeMs), Math.max(0, g.holdMs), Math.max(0, g.openMs)};
+    }
+    /** eyelid level at ms into a blink, or -1 once it is over */
+    public static float blinkLevel(Gen g, float ms) {
+        int[] t = blinkTimes(g);
+        if (ms < 0) return 0;
+        if (ms < t[0]) return ease(g.curve, ms / t[0]);
+        ms -= t[0];
+        if (ms < t[1]) return 1;
+        ms -= t[1];
+        if (ms < t[2]) return 1 - ease(g.curve, ms / t[2]);
+        return -1;
+    }
     /** advances a generator, returns its level 0..1 */
     public static float stepGen(Gen g, GenState s, float dt, java.util.Random r) {
         float rnd = clamp(g.rand, 0, 100) / 100f;
@@ -364,9 +403,15 @@ public final class Live2dMath {
                 s.pulse = 0; s.t = 0;
             }
             s.pulse += ms;
-            float len = Math.max(50f, g.pulseMs), p = s.pulse / len;
-            if (p >= 1) { s.pulse = -1; s.next = Math.max(200f, period * (1 + rnd * (2 * r.nextFloat() - 1))); return 0; }
-            return p < 0.3f ? p / 0.3f : p < 0.7f ? 1f : (1 - p) / 0.3f;
+            float lv = blinkLevel(g, s.pulse);
+            if (lv < 0) {
+                s.pulse = -1;
+                // 1.8.3: sometimes a quick second blink right after (never a third)
+                if (!s.second && g.doubleChance > 0 && r.nextFloat() * 100f < clamp(g.doubleChance, 0, 100)) { s.second = true; s.next = 80 + r.nextFloat() * 120; }
+                else { s.second = false; s.next = Math.max(200f, period * (1 + rnd * (2 * r.nextFloat() - 1))); }
+                return 0;
+            }
+            return lv;
         }
         s.phase += dt * 1000.0 / (period * s.mul) * 2 * Math.PI;
         if (s.phase >= 2 * Math.PI) {

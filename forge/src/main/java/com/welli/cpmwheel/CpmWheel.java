@@ -54,6 +54,7 @@ public class CpmWheel {
                 { if (WorldArm.suppress(e.getHand())) { e.setCanceled(true); return; }
                   if (HandAnim.apply(e.getPoseStack(), e.getHand(), e.getItemStack(), e.getPartialTick(), e.getSwingProgress(), e.getEquipProgress(), e.getMultiBufferSource(), e.getPackedLight())) e.setCanceled(true); });
         MinecraftForge.EVENT_BUS.addListener((net.minecraftforge.client.event.RenderGuiEvent.Post e) -> Hud.render(e.getGuiGraphics()));
+        MinecraftForge.EVENT_BUS.addListener((net.minecraftforge.client.event.RenderGuiEvent.Post e) -> LookOverlay.render(e.getGuiGraphics())); // 1.8.3 look-at debug overlay (off by default)
     }
 
     private void keys(RegisterKeyMappingsEvent e) {

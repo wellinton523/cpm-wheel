@@ -293,7 +293,7 @@ public class WheelConfig {
     public String centerMode = "player";
     /** center size in percent (50-200) */
     public int centerSize = 100;
-    public int configVersion = 25;
+    public int configVersion = 26;
     /** 1.6.0 global switches: extra trigger conditions, timed transitions, custom sounds (per-button / per-rule sounds) */
     public boolean trigCondsOn = true, trigTransOn = true, customSounds = true;
     /** 1.7.0 "Física Live2D": chains of CPM value layers driven by spring physics */
@@ -306,6 +306,21 @@ public class WheelConfig {
     public boolean l2dWindOn = false, l2dImpactOn = false, l2dLookOn = false, l2dVoiceOn = false, l2dLayerOn = false, l2dGenOn = false;
     public int l2dWindPct = 100, l2dImpactPct = 100, l2dLookRadius = 8, l2dVoicePct = 100;
     public boolean l2dLookPlayers = true;
+    /** 1.8.3 "Olhar": who can be a target ("players" / "mobs" / "both" / "off"), how it is chosen ("screen" = area around the
+     *  centre of your own view, default; "nearest" = the 1.8.0 way), and the privacy filters (all on by default) */
+    public String l2dLookTargets = "players", l2dLookMode = "screen";
+    public boolean l2dLookSafeCam = true, l2dLookHideHidden = true, l2dLookVanishTag = true, l2dLookLos = true;
+    public int l2dLookFov = 160, l2dLookMaxYaw = 60;
+    /** screen area: "circle" (radius % of the screen height) or "rect" (width / height % of the screen), offset % from the centre */
+    public String l2dLookShape = "circle";
+    public int l2dLookAreaR = 20, l2dLookAreaW = 40, l2dLookAreaH = 30, l2dLookOffX = 0, l2dLookOffY = 0;
+    /** stickiness so it doesn't flick between two targets; debug overlay (area outline + target marker on the HUD) */
+    public boolean l2dLookSticky = true, l2dLookDebug = false;
+    public int l2dLookStickPct = 25;
+    /** eye smoothing: "spring" (critically damped) / "lerp" / "off", response (ms), max speed (°/s, 0 = no limit), saccades (%),
+     *  return-to-centre delay (ms), softer move after a target change (ms) */
+    public String l2dLookSmooth = "spring";
+    public int l2dLookRespMs = 150, l2dLookMaxSpeed = 720, l2dLookSaccade = 0, l2dLookReturnMs = 600, l2dLookSwitchMs = 250;
     public List<Live2dMath.Gen> l2dGens = new ArrayList<>();
     /** 1.8.0 "Teclas de emotes": animation per key slot (key.cpmwheel.emote1..8, set in Controls); off by default */
     public boolean emoteKeysOn = false;
@@ -507,6 +522,9 @@ public class WheelConfig {
                         if (c.haArm != null) c.haArm.entrySet().removeIf(e -> DEF_ARM.containsKey(e.getKey()) && allZero(e.getValue())); }
                     if (c.configVersion < 25) { c.configVersion = 25; // 1.8.1: Emotecraft bridge, off until turned on
                         c.ecOn = false; c.ecL2d = "none"; c.ecKick = 30; }
+                    if (c.configVersion < 26) { c.configVersion = 26; // 1.8.3: look-at targets keep the old choice, privacy filters on, screen-area mode
+                        c.l2dLookTargets = c.l2dLookPlayers ? "players" : "both"; c.l2dLookMode = "screen";
+                        c.l2dLookSafeCam = c.l2dLookHideHidden = c.l2dLookVanishTag = c.l2dLookLos = true; c.l2dLookDebug = false; }
                     c.fixup();
                     if (c.centerMode == null || c.centerMode.isBlank()) c.centerMode = "player";
                     if (c.hudCorner == null || c.hudCorner.isBlank()) c.hudCorner = "top_left";
@@ -577,6 +595,16 @@ public class WheelConfig {
         // 1.8.0
         l2dWindPct = clamp(l2dWindPct, 0, 300); l2dImpactPct = clamp(l2dImpactPct, 0, 300); l2dVoicePct = clamp(l2dVoicePct, 0, 300);
         l2dLookRadius = clamp(l2dLookRadius <= 0 ? 8 : l2dLookRadius, 2, 32);
+        if (!java.util.List.of("players", "mobs", "both", "off").contains(l2dLookTargets)) l2dLookTargets = "players";
+        if (!"nearest".equals(l2dLookMode)) l2dLookMode = "screen";
+        if (!"rect".equals(l2dLookShape)) l2dLookShape = "circle";
+        if (!java.util.List.of("spring", "lerp", "off").contains(l2dLookSmooth)) l2dLookSmooth = "spring";
+        l2dLookPlayers = "players".equals(l2dLookTargets);
+        l2dLookFov = clamp(l2dLookFov, 20, 360); l2dLookMaxYaw = clamp(l2dLookMaxYaw, 5, 90);
+        l2dLookAreaR = clamp(l2dLookAreaR, 2, 100); l2dLookAreaW = clamp(l2dLookAreaW, 2, 100); l2dLookAreaH = clamp(l2dLookAreaH, 2, 100);
+        l2dLookOffX = clamp(l2dLookOffX, -50, 50); l2dLookOffY = clamp(l2dLookOffY, -50, 50); l2dLookStickPct = clamp(l2dLookStickPct, 0, 100);
+        l2dLookRespMs = clamp(l2dLookRespMs, 0, 2000); l2dLookMaxSpeed = clamp(l2dLookMaxSpeed, 0, 3000); l2dLookSaccade = clamp(l2dLookSaccade, 0, 100);
+        l2dLookReturnMs = clamp(l2dLookReturnMs, 0, 5000); l2dLookSwitchMs = clamp(l2dLookSwitchMs, 0, 2000);
         if (l2dGens == null) l2dGens = new ArrayList<>();
         l2dGens.removeIf(java.util.Objects::isNull);
         while (l2dGens.size() > 8) l2dGens.remove(l2dGens.size() - 1);
@@ -586,6 +614,14 @@ public class WheelConfig {
             if (!"blink".equals(g.kind)) g.kind = "breath";
             g.periodMs = clamp(g.periodMs, 200, 30000); g.lo = clamp(g.lo, 0, 100); g.hi = clamp(g.hi, 0, 100);
             g.rand = clamp(g.rand, 0, 100); g.pulseMs = clamp(g.pulseMs, 50, 2000);
+            // 1.8.3 smooth blink (blinks from before 1.8.3 keep their old timing, now with the smooth curve)
+            if (g.closeMs < 0 || g.holdMs < 0 || g.openMs < 0) { int[] t = Live2dMath.blinkTimes(g); g.closeMs = t[0]; g.holdMs = t[1]; g.openMs = t[2]; }
+            g.closeMs = clamp(g.closeMs, 0, 2000); g.holdMs = clamp(g.holdMs, 0, 2000); g.openMs = clamp(g.openMs, 0, 2000);
+            if (g.closeMs + g.holdMs + g.openMs < 50) g.holdMs = 50 - g.closeMs - g.openMs;
+            g.curve = Live2dMath.curve(g.curve); g.doubleChance = clamp(g.doubleChance, 0, 100);
+            if (g.more == null) g.more = new ArrayList<>();
+            g.more.removeIf(m -> m == null || m.isBlank() || m.equals(g.anim));
+            while (g.more.size() > 4) g.more.remove(g.more.size() - 1);
         }
         if (emoteKeys == null) emoteKeys = new ArrayList<>();
         emoteKeys.replaceAll(k -> k == null ? "" : k);

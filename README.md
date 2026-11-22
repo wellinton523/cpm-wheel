@@ -2,7 +2,7 @@
 
 # CPM Wheel
 
-![versão](https://img.shields.io/badge/vers%C3%A3o-1.8.2-2ee6ff)
+![versão](https://img.shields.io/badge/vers%C3%A3o-1.8.3-2ee6ff)
 ![NeoForge 1.21.1](https://img.shields.io/badge/NeoForge-1.21.1%20(21.1.x)-orange)
 ![Forge 1.20.1](https://img.shields.io/badge/Forge-1.20.1%20(47.x)-blue)
 ![lado](https://img.shields.io/badge/lado-cliente-lightgrey)
@@ -31,6 +31,7 @@ Autor: **Zeraph**. Mod só de cliente: o servidor não precisa ter.
 - [Recursos](#recursos)
 - [Novidades da 1.8.0](#novidades-da-180)
 - [Emotecraft (1.8.1)](#emotecraft-181)
+- [Olhar e piscar (1.8.3)](#olhar-e-piscar-183)
 - [Guia rápido: Física Live2D (cabelo)](#guia-rápido-física-live2d-cabelo)
 - [Configuração e teclas](#configuração-e-teclas)
 - [Compilar](#compilar)
@@ -202,7 +203,7 @@ Tudo vem **desligado** e não faz nada até você ligar.
 - **Extras** (botão "Extras"):
   - **Vento**: rajadas; chuva ×1,8, tempestade ×3; mais forte no alto e em biomas abertos, fraco embaixo de teto;
   - **Impactos**: um tranco ao levar dano ou ao cair no chão;
-  - **Olhar**: ângulo até o jogador (ou criatura) mais perto dentro do raio;
+  - **Olhar**: ângulo até o alvo escolhido pela área em volta do centro da sua visão (1.8.3, padrão) ou o mais perto, com filtros de privacidade;
   - **Voz**: com o [Simple Voice Chat](https://modrinth.com/plugin/simple-voice-chat) (opcional) a boca abre e fecha enquanto você fala;
   - **Animação em movimento**: outra animação do CPM empurra a física (modo taxa, valor ou oscilar — ex.: asas batendo mexem o cabelo);
   - **Respirar e piscar**: geradores automáticos de camadas de valor.
@@ -232,6 +233,20 @@ Integração **opcional** com o [Emotecraft](https://modrinth.com/mod/emotecraft
 - **Condição "Emote (Emotecraft)"** (qualquer um ou pelo nome): Gatilhos de efeito, "Desativar quando" da Física Live2D e Encadear animações (botão **EC**).
 - **Física durante emotes:** nada, desligar as correntes, ou um tranco no começo/fim (entrada "Emote do Emotecraft (tranco)").
 - Os emotes do Emotecraft mexem nas partes vanilla do jogador; num modelo do CPM só as partes ligadas a elas acompanham.
+
+---
+
+## Olhar e piscar (1.8.3)
+
+- **Área na tela (padrão):** o alvo é quem está dentro de uma área em volta do centro da visão do **seu personagem** (círculo ou retângulo, tamanho e deslocamento em %) e mais perto do centro. A distância só desempata e serve de alcance máximo. O modo antigo, "mais próximo", continua disponível.
+- **Nunca a câmera:** Freecam, Flashback/ReplayMod, F5 e espectar não mexem nos olhos nem viram alvo.
+- **Privacidade (tudo ligado):** ignora invisíveis, espectadores, quem está fora da lista do Tab, marcados com vanish ("[V]", "Vanished") e, com linha de visão, quem está atrás de blocos.
+- **Sem pular entre alvos:** "manter alvo" com tolerância e troca de alvo suave.
+- **Suavização dos olhos:** mola criticamente amortecida, exponencial ou desligada, com resposta, velocidade máxima, micro-movimentos e tempo para voltar ao centro.
+- **Piscar suave:** tempos de fechar, fechado e abrir, curva, piscada dupla e camadas extras (as duas pálpebras juntas).
+- **Prévia e depuração:** contorno da área na tela de opções e, opcionalmente, no HUD.
+- Onde fica: Física Live2D › Extras › "Olhar: opções…" e, no gerador de piscar, "Piscar: suavização e camadas…".
+- **O que os outros veem:** com a sincronização ligada, só o valor da camada dos olhos vai pelo CPM. A escolha do alvo fica no seu cliente.
 
 ---
 
@@ -298,6 +313,7 @@ A versão fica em `gradle.properties` (`mod_version`). Os testes offline são Ja
 
 ```bash
 javac -d /tmp/l2 src/main/java/com/welli/cpmwheel/Live2dMath.java src/main/java/com/welli/cpmwheel/TriggerLogic.java tools/Live2dMathCheck.java && java -cp /tmp/l2 Live2dMathCheck
+javac -d /tmp/lk src/main/java/com/welli/cpmwheel/Live2dMath.java src/main/java/com/welli/cpmwheel/TriggerLogic.java src/main/java/com/welli/cpmwheel/LookLogic.java tools/LookLogicCheck.java && java -cp /tmp/lk LookLogicCheck
 javac -d /tmp/tl src/main/java/com/welli/cpmwheel/TriggerLogic.java tools/TriggerLogicCheck.java && java -cp /tmp/tl TriggerLogicCheck
 javac -d /tmp/pm src/main/java/com/welli/cpmwheel/PendulumMath.java tools/PendulumMathCheck.java && java -cp /tmp/pm PendulumMathCheck
 ```
@@ -312,6 +328,7 @@ Notas completas em cada [release](https://github.com/wellinton523/cpm-wheel/rele
 
 | Versão | Destaques |
 |---|---|
+| [1.8.3](https://github.com/wellinton523/cpm-wheel/releases/tag/v1.8.3) | Olhar: área na tela (padrão), nunca a câmera livre, filtros de invisíveis/vanish/linha de visão, manter alvo, olhos suavizados; piscar suave com curva, piscada dupla e camadas extras |
 | [1.8.2](https://github.com/wellinton523/cpm-wheel/releases/tag/v1.8.2) | Emotecraft: ícones e informações dos emotes na lista, ícone do emote na roda e no HUD |
 | [1.8.1](https://github.com/wellinton523/cpm-wheel/releases/tag/v1.8.1) | Integração opcional com **Emotecraft**: botão de emote, condição "Emote (Emotecraft)" (gatilhos, encadear, desativar física), física durante emotes |
 | [1.8.0](https://github.com/wellinton523/cpm-wheel/releases/tag/v1.8.0) | Prévia ao vivo da física, vento, impactos, olhar, voz (Simple Voice Chat), animação em movimento, respirar/piscar, limite suave, espelhar, presets; teclas de emotes, encadear animações, perfis por modelo, ícone |
@@ -377,6 +394,7 @@ Notas completas em cada [release](https://github.com/wellinton523/cpm-wheel/rele
   - "Disable when" conditions with fades.
   - 1.8.0: live preview, wind, impacts, look-at, voice (Simple Voice Chat), animation-driven input, breathing/blinking, soft limits, mirroring, presets.
 - 1.8.0: quick emote keys, chained animations, automatic per-model profiles. All new features are off by default.
+- 1.8.3: look-at picks the target inside a screen area around the centre of your own view (default; "nearest" kept), never the free camera (Freecam/Flashback/ReplayMod/F5/spectating), skips invisible, spectator, off-tab-list, vanish-tagged and out-of-sight entities; stickiness, smoothed eyes (critically damped spring, max speed, saccades, return delay); smooth blink (close/hold/open, curve, double blink, extra layers).
 - 1.8.2: Emotecraft emote icons and details in the picker; the emote icon on the wheel slice (default) and in the HUD.
 - 1.8.1: optional Emotecraft bridge (reflection, no hard dependency): emote wheel button, "Emotecraft emote playing" condition, physics off / kick during emotes. Emotecraft 2.4.x on NeoForge 1.21.1, 2.2.7 on Forge 1.20.1.
 

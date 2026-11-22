@@ -16,6 +16,9 @@ public abstract class MiniScreen extends Screen {
 
     protected MiniScreen(String titleKey, Screen parent, WheelConfig cfg) { super(Component.translatable(titleKey)); this.parent = parent; this.cfg = cfg; }
 
+    /** 1.8.3: backdrop colour (the look-at screen uses a lighter one to see the area over the world) */
+    protected int backdrop() { return 0xC0050A12; }
+
     static String onoff(boolean b) { return b ? "ON" : "OFF"; }
     static Tooltip tip(String k) { return Tooltip.create(Component.translatable(k)); }
 
@@ -40,7 +43,7 @@ public abstract class MiniScreen extends Screen {
 
     @Override
     public void render(GuiGraphics g, int mx, int my, float pt) {
-        g.fill(0, 0, width, height, 0xC0050A12);
+        g.fill(0, 0, width, height, backdrop());
         g.drawString(font, title, 8, 10, Style.accent(cfg));
         super.render(g, mx, my, pt);
     }
