@@ -90,6 +90,32 @@ public class LookLogicCheck {
         LookLogic.Eye bad = new LookLogic.Eye(); LookLogic.step(bad, true, Float.NaN, 0, false, s, 0.05f, rr);
         ok("NaN never sticks", Float.isFinite(bad.y));
 
+        // 1.8.4 eye-aim overlay
+        {   float[] c0 = LookLogic.aimScreen(0, 0, 0, 0, 0, 0, 70, 1.7f);
+            ok("eyes centred -> marker at the screen centre", c0 != null && near(c0[0], 0, 1e-3f) && near(c0[1], 0, 1e-3f));
+            float[] r1 = LookLogic.aimScreen(0, 0, 20, 0, 0, 0, 70, 1.7f);
+            ok("eyes 20° right -> marker right of centre", r1 != null && r1[0] > 5 && Math.abs(r1[1]) < 1e-3f);
+            float[] d1 = LookLogic.aimScreen(0, 0, 0, 15, 0, 0, 70, 1.7f);
+            ok("eyes 15° down -> marker below centre", d1 != null && d1[1] < -5);
+            Cand tc = new Cand(9, -2, 1, 6);
+            float[] la = Live2dMath.lookAngles(tc.dx, tc.dy, tc.dz, 0, 0, 60);
+            float[] viaEyes = LookLogic.aimScreen(0, 0, la[0], la[1], 0, 0, 70, 1.7f), direct = LookLogic.project(tc.dx, tc.dy, tc.dz, 0, 0, 70, 1.7f);
+            ok("eyes fully on a target -> marker lands on the target", near(viaEyes[0], direct[0], 0.05f) && near(viaEyes[1], direct[1], 0.05f));
+            float[] hr = LookLogic.aimScreen(30, 0, -30, 0, 0, 0, 70, 1.7f);
+            ok("head turned 30° right, eyes 30° left -> centre of the view", near(hr[0], 0, 1e-3f));
+            ok("eyes pointing behind the view -> no marker", LookLogic.aimScreen(180, 0, 0, 0, 0, 0, 70, 1.7f) == null);
+            LookLogic.Smooth ss = new LookLogic.Smooth(); ss.returnMs = 500; LookLogic.Eye ee = new LookLogic.Eye();
+            ok("state: idle at start", LookLogic.state(ee, ss, false).equals("idle"));
+            for (int i = 0; i < 20; i++) LookLogic.step(ee, true, 20, 0, false, ss, 0.05f, null);
+            ok("state: following", LookLogic.state(ee, ss, true).equals("target"));
+            LookLogic.step(ee, false, 0, 0, false, ss, 0.05f, null);
+            ok("state: waiting after the target is lost", LookLogic.state(ee, ss, false).equals("hold"));
+            for (int i = 0; i < 12; i++) LookLogic.step(ee, false, 0, 0, false, ss, 0.05f, null);
+            ok("state: returning to centre", LookLogic.state(ee, ss, false).equals("centering"));
+            for (int i = 0; i < 60; i++) LookLogic.step(ee, false, 0, 0, false, ss, 0.05f, null);
+            ok("state: idle again", LookLogic.state(ee, ss, false).equals("idle"));
+        }
+
         // smooth blink
         Live2dMath.Gen bl = new Live2dMath.Gen(); bl.kind = "blink"; bl.closeMs = 100; bl.holdMs = 50; bl.openMs = 150; bl.curve = "smooth";
         ok("blink: starts open", Live2dMath.blinkLevel(bl, 0) == 0);
@@ -112,7 +138,64 @@ public class LookLogicCheck {
         boolean regular = true; for (int i = 1; i < at.size(); i++) regular &= at.get(i) - at.get(i - 1) > 12;
         ok("double blink at 0 %: single blinks", regular && at.size() >= 6);
 
+        v190();
         System.out.println((fails == 0 ? "ALL OK " : "FAILED ") + (n - fails) + "/" + n);
         if (fails > 0) System.exit(1);
+    }
+
+    static void v190() {
+        // ---------- 1.9.0 ----------
+        ok("order: unknown -> default", LookLogic.order("x").equals("mining,items,mobs"));
+        { String o = "mining,items,mobs"; java.util.Set<String> all = new java.util.HashSet<>(); for (int i = 0; i < 6; i++) { all.add(o); o = LookLogic.nextOrder(o); }
+          ok("order: cycles through all 6 and back", all.size() == 6 && o.equals("mining,items,mobs")); }
+        {
+            LookLogic.Glance g = new LookLogic.Glance(); java.util.Set<Integer> el = new java.util.HashSet<>(java.util.List.of(1, 2));
+            ok("glance: targets already there don't count", LookLogic.glance(g, el, 1, 300, 1000, 100, 0.05f, new Random(1)) == -1 && LookLogic.glance(g, el, 1, 300, 1000, 100, 0.05f, new Random(1)) == -1);
+            el.add(3);
+            ok("glance: new target -> glance at it", LookLogic.glance(g, el, 1, 300, 1000, 100, 0.05f, new Random(1)) == 3);
+            int t = 0; while (LookLogic.glance(g, el, 1, 300, 1000, 100, 0.05f, new Random(1)) == 3 && t < 100) t++;
+            ok("glance: lasts about its duration (" + t + " ticks)", t >= 4 && t <= 6);
+            el.add(4);
+            ok("glance: cooldown blocks the next one", LookLogic.glance(g, el, 1, 300, 1000, 100, 0.05f, new Random(1)) == -1);
+            for (int i = 0; i < 25; i++) LookLogic.glance(g, el, 1, 300, 1000, 100, 0.05f, new Random(1));
+            el.add(5);
+            ok("glance: after cooldown a new one works", LookLogic.glance(g, el, 1, 300, 1000, 100, 0.05f, new Random(1)) == 5);
+            LookLogic.Glance g0 = new LookLogic.Glance(); java.util.Set<Integer> e0 = new java.util.HashSet<>(java.util.List.of(1));
+            LookLogic.glance(g0, e0, 1, 300, 0, 0, 0.05f, new Random(1)); e0.add(9);
+            ok("glance: chance 0 never glances", LookLogic.glance(g0, e0, 1, 300, 0, 0, 0.05f, new Random(1)) == -1);
+            LookLogic.Glance g1 = new LookLogic.Glance(); java.util.Set<Integer> e1 = new java.util.HashSet<>(java.util.List.of(1));
+            LookLogic.glance(g1, e1, 1, 300, 0, 100, 0.05f, new Random(1)); e1.add(7);
+            LookLogic.glance(g1, e1, 1, 300, 0, 100, 0.05f, new Random(1)); e1.remove(7);
+            ok("glance: ends when the target leaves (privacy / range)", LookLogic.glance(g1, e1, 1, 300, 0, 100, 0.05f, new Random(1)) == -1);
+        }
+        ok("hurt: 0 before / after", LookLogic.hurtLevel(-0.1f, 0.45f) == 0 && LookLogic.hurtLevel(0.5f, 0.45f) == 0);
+        ok("hurt: shut quickly", LookLogic.hurtLevel(0.07f, 0.45f) == 1);
+        ok("hurt: easing open", LookLogic.hurtLevel(0.3f, 0.45f) > 0 && LookLogic.hurtLevel(0.3f, 0.45f) < 1 && LookLogic.hurtLevel(0.4f, 0.45f) < LookLogic.hurtLevel(0.3f, 0.45f));
+        ok("ctx: nothing -> 1", LookLogic.ctxRate(false, false, false, false, 150, 220, 140, 35) == 1);
+        ok("ctx: bright x1.5", near(LookLogic.ctxRate(true, false, false, false, 150, 220, 140, 35), 1.5f, 1e-5f));
+        ok("ctx: bright + aim combine", near(LookLogic.ctxRate(true, false, false, true, 150, 220, 140, 35), 0.525f, 1e-5f));
+        ok("ctx: clamped", LookLogic.ctxRate(true, true, true, false, 400, 400, 400, 35) == 6f && LookLogic.ctxRate(false, false, false, true, 150, 220, 140, 1) == 0.05f);
+        {
+            LookLogic.Idle d = new LookLogic.Idle(); Random r = new Random(3); boolean any = false;
+            for (int i = 0; i < 19 * 20; i++) any |= LookLogic.idle(d, false, 0.05f, 20, 14, 2000, r);
+            ok("idle: not before N s", !any);
+            for (int i = 0; i < 40; i++) LookLogic.idle(d, false, 0.05f, 20, 14, 2000, r);
+            ok("idle: after N s, wander inside ±amp", d.idle && Math.abs(d.wy) <= 14 && Math.abs(d.wp) <= 7 && (d.wy != 0 || d.wp != 0));
+            float wy = d.wy; boolean moved = false;
+            for (int i = 0; i < 80; i++) { LookLogic.idle(d, false, 0.05f, 20, 14, 2000, r); moved |= d.wy != wy; }
+            ok("idle: picks new wander points", moved);
+            ok("idle: activity resets", !LookLogic.idle(d, true, 0.05f, 20, 14, 2000, r) && d.still == 0 && d.wy == 0);
+        }
+        {
+            Live2dMath.Gen b = new Live2dMath.Gen(); b.kind = "blink"; b.closeMs = 100; b.holdMs = 50; b.openMs = 150; b.periodMs = 1000; b.rand = 0; b.doubleChance = 0;
+            int[] cnt = new int[3]; float[] rate = {1, 2, 0.5f};
+            for (int k = 0; k < 3; k++) { Live2dMath.GenState s = new Live2dMath.GenState(); s.rate = rate[k]; float pv = 0;
+                for (int i = 0; i < 20 * 20; i++) { float lv = Live2dMath.stepGen(b, s, 0.05f, new Random(i)); if (lv > 0 && pv == 0) cnt[k]++; pv = lv; } }
+            ok("blink rate: x2 blinks more, x0.5 less (" + cnt[0] + "/" + cnt[1] + "/" + cnt[2] + ")", cnt[1] > cnt[0] * 1.4 && cnt[2] < cnt[0] * 0.7);
+            Live2dMath.GenState s1 = new Live2dMath.GenState(), s2 = new Live2dMath.GenState(); s2.slow = 2; int l1 = 0, l2 = 0;
+            for (int i = 0; i < 20 * 3; i++) { if (Live2dMath.stepGen(b, s1, 0.05f, new Random(i)) > 0) l1++; if (Live2dMath.stepGen(b, s2, 0.05f, new Random(i)) > 0) l2++; }
+            ok("blink slow: eye closed longer per blink (" + l1 + " vs " + l2 + ")", l2 > l1);
+        }
+
     }
 }

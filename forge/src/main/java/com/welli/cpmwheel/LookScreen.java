@@ -46,6 +46,8 @@ public class LookScreen extends MiniScreen {
         } else { y += 4; }
         btn("cpmwheel.look.preview", b -> { preview = !preview; rebuildWidgets(); }, x2, y, w, "cpmwheel.look.preview.help", onoff(preview)); y += 22;
         btn("cpmwheel.look.debug", b -> { cfg.l2dLookDebug = !cfg.l2dLookDebug; rebuildWidgets(); }, x2, y, w, "cpmwheel.look.debug.help", onoff(cfg.l2dLookDebug)); y += 22;
+        btn("cpmwheel.eyeov.open", b -> minecraft.setScreen(new EyeOverlayScreen(this, cfg)), x2, y, w, "cpmwheel.eyeov.help", onoff(cfg.l2dEyeOv)); y += 22;
+        btn(Component.translatable("cpmwheel.lx.open"), b -> minecraft.setScreen(new LookExtrasScreen(this, cfg)), x2, y, w, 20, "cpmwheel.lx.open.help"); y += 22; // 1.9.0
         // column 3: privacy + smoothing
         y = 26;
         btn("cpmwheel.look.safecam", b -> { cfg.l2dLookSafeCam = !cfg.l2dLookSafeCam; rebuildWidgets(); }, x3, y, w, "cpmwheel.look.safecam.help", onoff(cfg.l2dLookSafeCam)); y += 22;
@@ -58,7 +60,7 @@ public class LookScreen extends MiniScreen {
         slider(x3, y, w, "cpmwheel.look.maxspeed", 0, 3000, 30, () -> cfg.l2dLookMaxSpeed, v -> cfg.l2dLookMaxSpeed = v, "°/s", "cpmwheel.look.maxspeed.help"); y += 22;
         slider(x3, y, w, "cpmwheel.look.saccade", 0, 100, 5, () -> cfg.l2dLookSaccade, v -> cfg.l2dLookSaccade = v, "%", "cpmwheel.look.saccade.help"); y += 22;
         slider(x3, y, w, "cpmwheel.look.return", 0, 5000, 50, () -> cfg.l2dLookReturnMs, v -> cfg.l2dLookReturnMs = v, " ms", "cpmwheel.look.return.help"); y += 22;
-        btn(Component.translatable("gui.done"), b -> onClose(), 8, height - 26, 150, 20, null);
+        btn(Component.translatable("gui.done"), b -> onClose(), 8, height - 26, Math.min(150, w), 20, null);
     }
 
     @Override
@@ -66,9 +68,9 @@ public class LookScreen extends MiniScreen {
         if (preview) LookOverlay.draw(g, cfg, width, height, 0xC02EE6FF);
         super.render(g, mx, my, pt);
         String t = LookTargets.targetName.isEmpty() ? Component.translatable("cpmwheel.look.dbg.none").getString()
-                : Component.translatable("cpmwheel.look.dbg.target", LookTargets.targetName).getString();
+                : Component.translatable("cpmwheel.look.dbg.target", Component.translatable("cpmwheel.eyeov.kind." + LookTargets.targetName)).getString();
         String sk = LookOverlay.skipText();
-        g.drawString(font, t + (sk.isEmpty() ? "" : "   " + sk), 166, height - 20, 0xCFE8F0);
+        g.drawString(font, font.plainSubstrByWidth(t + (sk.isEmpty() ? "" : "   " + sk), Math.max(40, width - 166 - 8)), 166, height - 20, 0xCFE8F0);
         if (!cfg.l2dOn) g.drawString(font, Component.translatable("cpmwheel.l2d.prev.off"), 166, height - 32, 0xFF6060);
     }
 }

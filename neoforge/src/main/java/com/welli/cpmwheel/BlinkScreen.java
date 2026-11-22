@@ -36,6 +36,7 @@ public class BlinkScreen extends MiniScreen {
         }
         if (g.more.size() < 4) btn("cpmwheel.blink.more.add", b -> minecraft.setScreen(new ValueLayerPickerScreen(this, cfg, "", v -> { if (v != null && !v.isBlank() && !v.equals(g.anim) && !g.more.contains(v)) g.more.add(v); Live2d.reset(); })), x2, y, w, "cpmwheel.blink.more.help");
         btn(Component.translatable("gui.done"), b -> onClose(), 8, height - 26, 150, 20, null);
+        btn(Component.translatable("cpmwheel.bctx.open"), b -> minecraft.setScreen(new BlinkContextScreen(this, cfg)), width - 158, height - 26, 150, 20, "cpmwheel.bctx.help"); // 1.9.0
     }
 
     @Override

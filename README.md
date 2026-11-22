@@ -2,7 +2,7 @@
 
 # CPM Wheel
 
-![versão](https://img.shields.io/badge/vers%C3%A3o-1.8.3-2ee6ff)
+![versão](https://img.shields.io/badge/vers%C3%A3o-1.9.0-2ee6ff)
 ![NeoForge 1.21.1](https://img.shields.io/badge/NeoForge-1.21.1%20(21.1.x)-orange)
 ![Forge 1.20.1](https://img.shields.io/badge/Forge-1.20.1%20(47.x)-blue)
 ![lado](https://img.shields.io/badge/lado-cliente-lightgrey)
@@ -32,6 +32,7 @@ Autor: **Zeraph**. Mod só de cliente: o servidor não precisa ter.
 - [Novidades da 1.8.0](#novidades-da-180)
 - [Emotecraft (1.8.1)](#emotecraft-181)
 - [Olhar e piscar (1.8.3)](#olhar-e-piscar-183)
+- [Novidades da 1.9.0](#novidades-da-190)
 - [Guia rápido: Física Live2D (cabelo)](#guia-rápido-física-live2d-cabelo)
 - [Configuração e teclas](#configuração-e-teclas)
 - [Compilar](#compilar)
@@ -250,6 +251,17 @@ Integração **opcional** com o [Emotecraft](https://modrinth.com/mod/emotecraft
 
 ---
 
+## Novidades da 1.9.0
+
+Tudo **desligado por padrão**; cada recurso tem a própria chave.
+
+- **Overlay dos olhos:** marcador pequeno no HUD mostrando mais ou menos onde os olhos estão mirando (posição suavizada, mira crua opcional, contorno da área, tipo do alvo e estado). Nunca mostra nomes; com Freecam/F5/espectar vira um medidor no topo. Física Live2D › Extras › "Olhar: opções…" › "Overlay dos olhos"; tecla opcional em Controles.
+- **Extras do olhar** ("Olhar: opções…" › "Extras do olhar…"): olhadinhas em quem acabou de aparecer, reação a dano (aperta os olhos e olha o atacante, se ele passar nos filtros), olhar itens no chão / bloco quebrando / mobs quando não há jogador (ordem configurável) e modo ocioso (olhar passeando, piscadas lentas e sonolentas).
+- **Piscar por contexto** ("Piscar: suavização" › "Piscar: contexto…"): pisca mais no sol forte, embaixo d'água e na chuva/areia; menos mirando arco, besta, tridente ou luneta.
+- **Exportar / importar perfis:** Configurações › Perfis automáticos › "Exportar config deste modelo" e "Importar perfil…" (arquivos em `config/cpmwheel/export/` e `config/cpmwheel/import/`), ou `/cpmwheel perfil listar | exportar [nome] | importar <arquivo> [nome] [substituir] | usar <nome>`. A importação valida o arquivo, nunca substitui sem confirmar e faz backup em `profiles/_backup/`.
+
+---
+
 ## Guia rápido: Física Live2D (cabelo)
 
 **No editor do CPM:**
@@ -328,6 +340,7 @@ Notas completas em cada [release](https://github.com/wellinton523/cpm-wheel/rele
 
 | Versão | Destaques |
 |---|---|
+| [1.9.0](https://github.com/wellinton523/cpm-wheel/releases/tag/v1.9.0) | Overlay dos olhos; olhadinhas, reação a dano, olhar itens/blocos/mobs, modo ocioso; piscar por contexto; exportar/importar perfis (botões e comando) |
 | [1.8.3](https://github.com/wellinton523/cpm-wheel/releases/tag/v1.8.3) | Olhar: área na tela (padrão), nunca a câmera livre, filtros de invisíveis/vanish/linha de visão, manter alvo, olhos suavizados; piscar suave com curva, piscada dupla e camadas extras |
 | [1.8.2](https://github.com/wellinton523/cpm-wheel/releases/tag/v1.8.2) | Emotecraft: ícones e informações dos emotes na lista, ícone do emote na roda e no HUD |
 | [1.8.1](https://github.com/wellinton523/cpm-wheel/releases/tag/v1.8.1) | Integração opcional com **Emotecraft**: botão de emote, condição "Emote (Emotecraft)" (gatilhos, encadear, desativar física), física durante emotes |
@@ -359,7 +372,8 @@ Notas completas em cada [release](https://github.com/wellinton523/cpm-wheel/rele
   - "Pausar c/ gatilho" é imediato, sem fade.
 - **Voz:** o Simple Voice Chat não informa o volume do seu próprio microfone, então a boca só sabe "falando / calado" e faz um abre-e-fecha sintético. É lido por reflexão; se o mod mudar por dentro, a entrada se desliga sozinha (aparece no log).
 - **Emotecraft:** a condição e a física olham só o seu personagem; animações e camadas próprias do CPM não são tocadas pelo Emotecraft. Se uma versão futura do Emotecraft mudar as funções usadas, a integração se desliga sozinha (aparece no log).
-- **Perfis automáticos:** o perfil troca a config inteira; não dá para escolher só algumas partes de um perfil.
+- **Perfis automáticos:** o perfil troca a config inteira; não dá para escolher só algumas partes de um perfil (nem ao importar).
+- **Overlay dos olhos:** é uma aproximação (projeção da direção dos olhos com o FOV atual); com Freecam/F5 vira só um medidor. "Chuva" no piscar por contexto usa a chuva do bioma; tempestade de areia = chuva em deserto/badlands.
 - **Gatilhos:**
   - "Chuva" vale para o mundo, mesmo debaixo de um teto ou num bioma seco;
   - noite e dia nunca valem no Nether/End.
@@ -394,6 +408,7 @@ Notas completas em cada [release](https://github.com/wellinton523/cpm-wheel/rele
   - "Disable when" conditions with fades.
   - 1.8.0: live preview, wind, impacts, look-at, voice (Simple Voice Chat), animation-driven input, breathing/blinking, soft limits, mirroring, presets.
 - 1.8.0: quick emote keys, chained animations, automatic per-model profiles. All new features are off by default.
+- 1.9.0 (all off by default): eye-aim HUD overlay (no names ever; a small gauge in freecam/F5), intentional glances at newly appeared targets, damage reaction (squint + quick look at an eligible attacker), context blink rate (sun, underwater, rain/sand, aiming), look at the mined block / dropped items / mobs when no player is around, idle wander with sleepy blinks, and profile export/import (UI + `/cpmwheel perfil ...`, validated, never overwrites without confirmation, automatic backup).
 - 1.8.3: look-at picks the target inside a screen area around the centre of your own view (default; "nearest" kept), never the free camera (Freecam/Flashback/ReplayMod/F5/spectating), skips invisible, spectator, off-tab-list, vanish-tagged and out-of-sight entities; stickiness, smoothed eyes (critically damped spring, max speed, saccades, return delay); smooth blink (close/hold/open, curve, double blink, extra layers).
 - 1.8.2: Emotecraft emote icons and details in the picker; the emote icon on the wheel slice (default) and in the HUD.
 - 1.8.1: optional Emotecraft bridge (reflection, no hard dependency): emote wheel button, "Emotecraft emote playing" condition, physics off / kick during emotes. Emotecraft 2.4.x on NeoForge 1.21.1, 2.2.7 on Forge 1.20.1.

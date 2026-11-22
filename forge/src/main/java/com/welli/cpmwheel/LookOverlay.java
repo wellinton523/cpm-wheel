@@ -19,7 +19,7 @@ public final class LookOverlay {
             int w = g.guiWidth(), h = g.guiHeight();
             draw(g, c, w, h, 0xA02EE6FF);
             String t = LookTargets.targetName.isEmpty() ? Component.translatable("cpmwheel.look.dbg.none").getString()
-                    : Component.translatable("cpmwheel.look.dbg.target", LookTargets.targetName).getString();
+                    : Component.translatable("cpmwheel.look.dbg.target", Component.translatable("cpmwheel.eyeov.kind." + LookTargets.targetName)).getString();
             g.drawString(mc.font, t, w / 2 + 6, h / 2 + 6, 0xFFE0F8FF);
             String sk = skipText();
             if (!sk.isEmpty()) g.drawString(mc.font, sk, w / 2 + 6, h / 2 + 17, 0xFF9FB8C4);

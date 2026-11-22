@@ -356,7 +356,9 @@ public final class Live2dMath {
         public int doubleChance = 0;
         public java.util.List<String> more = new java.util.ArrayList<>();
     }
-    public static final class GenState { public double phase; public float amp = 1, mul = 1, t, next = -1, pulse = -1; public boolean second; }
+    public static final class GenState { public double phase; public float amp = 1, mul = 1, t, next = -1, pulse = -1; public boolean second;
+        /** 1.9.0: blink rate multiplier (context / idle) and closing-opening slowness (idle) */
+        public float rate = 1, slow = 1; }
 
     // ---------- 1.8.3 smooth blink ----------
     public static final String[] CURVES = {"smooth", "sine", "quick", "linear"};
@@ -398,11 +400,11 @@ public final class Live2dMath {
             if (s.next < 0) s.next = Math.max(200f, period * (1 + rnd * (2 * r.nextFloat() - 1)));
             float ms = dt * 1000f;
             if (s.pulse < 0) {
-                s.t += ms;
+                s.t += ms * Math.max(0.01f, s.rate);
                 if (s.t < s.next) return 0;
                 s.pulse = 0; s.t = 0;
             }
-            s.pulse += ms;
+            s.pulse += ms / Math.max(0.1f, s.slow);
             float lv = blinkLevel(g, s.pulse);
             if (lv < 0) {
                 s.pulse = -1;

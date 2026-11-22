@@ -23,4 +23,22 @@ public final class ProfileLogic {
     }
 
     public static boolean isProfile(String key) { return key != null && key.startsWith("@"); }
+
+    // ---------- 1.9.0 export / import ----------
+    /** first free name: "name", "name-2", "name-3", ... */
+    public static String unique(String name, java.util.function.Predicate<String> exists) {
+        String n = clean(name); if (n.isEmpty()) n = "perfil";
+        if (!exists.test(n)) return n;
+        for (int i = 2; i < 1000; i++) { String k = n + "-" + i; if (!exists.test(k)) return k; }
+        return n + "-" + System.currentTimeMillis();
+    }
+    /** backup file name for a profile about to be replaced */
+    public static String backupName(String name, String stamp) { return clean(name) + "-" + stamp.replaceAll("[^0-9A-Za-z_-]", "") + ".json"; }
+    /** suggested profile name from an import file name ("x.cpmw.json" / "x.json" -> "x") */
+    public static String nameFromFile(String file) {
+        String n = file == null ? "" : file;
+        if (n.endsWith(".json")) n = n.substring(0, n.length() - 5);
+        if (n.endsWith(".cpmw")) n = n.substring(0, n.length() - 5);
+        return clean(n);
+    }
 }

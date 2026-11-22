@@ -10,8 +10,10 @@ import net.minecraft.client.multiplayer.PlayerInfo;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.Mob;
+import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.ClipContext;
+import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
 
@@ -24,14 +26,15 @@ import net.minecraft.world.phys.Vec3;
 public final class LookTargets {
     private LookTargets() {}
 
-    /** for the screens / overlay: current target, its screen point (% from the centre) and why others were skipped */
+    /** for the screens / overlays: kind of the current target ("player" / "mob", never its name), its screen point (% from the centre)
+     *  and why others were skipped */
     public static volatile String targetName = "";
     public static volatile float[] targetScreen = null;
     public static volatile Map<String, Integer> skipped = Map.of();
     private static int current = -1;
 
     public static int current() { return current; }
-    public static void clear() { current = -1; targetName = ""; targetScreen = null; skipped = Map.of(); }
+    public static void clear() { current = -1; targetName = ""; targetScreen = null; skipped = Map.of(); ELIGIBLE.clear(); }
 
     public static LookLogic.Opts opts(Minecraft mc, WheelConfig c) {
         LookLogic.Opts o = new LookLogic.Opts();
@@ -43,40 +46,85 @@ public final class LookTargets {
         return o;
     }
 
-    /** the chosen entity, or null; the eye angles are computed by the caller */
-    public static Entity find(Minecraft mc, LocalPlayer p, WheelConfig c) {
+    /** 1.9.0: a look target: entity id (or MINING_ID for the block being mined), point to look at, kind ("player" / "mob" / "item" / "block") */
+    public static final class Target {
+        public final int id; public final Vec3 pos; public final String kind;
+        Target(int id, Vec3 pos, String kind) { this.id = id; this.pos = pos; this.kind = kind; }
+    }
+    public static final int MINING_ID = Integer.MIN_VALUE + 7;
+    /** eligible entity targets of the last search (id -> target), for glances; filled on the client thread only */
+    public static final Map<Integer, Target> ELIGIBLE = new HashMap<>();
+
+    /** the chosen target, or null; the eye angles are computed by the caller */
+    public static Target find(Minecraft mc, LocalPlayer p, WheelConfig c) {
         String who = c.l2dLookTargets;
+        ELIGIBLE.clear();
         if ("off".equals(who) || p == null || p.level() == null) { clear(); return null; }
         LookLogic.Opts o = opts(mc, c);
         Vec3 eye = p.getEyePosition();
         float yaw = p.getYRot(), pitch = p.getXRot();     // the player's own view (the crosshair), not the camera
         double r = c.l2dLookRadius;
-        List<Entity> pool = new ArrayList<>();
-        if ("players".equals(who) || "both".equals(who)) for (Player o2 : p.level().players()) pool.add(o2);
-        if ("mobs".equals(who) || "both".equals(who)) pool.addAll(p.level().getEntitiesOfClass(Mob.class, p.getBoundingBox().inflate(r), e -> true));
+        boolean obj = c.l2dObjOn;
+        boolean wantPlayers = "players".equals(who) || "both".equals(who);
+        boolean wantMobs = "mobs".equals(who) || "both".equals(who) || (obj && c.l2dObjMobs);
         Map<String, Integer> skip = new HashMap<>();
-        List<LookLogic.Cand> cands = new ArrayList<>();
-        Map<Integer, Entity> byId = new HashMap<>();
+        Map<String, List<LookLogic.Cand>> groups = new HashMap<>();
+        Map<Integer, Target> byId = new HashMap<>();
         Entity cam = mc.getCameraEntity();
+        List<Entity> pool = new ArrayList<>();
+        if (wantPlayers) for (Player o2 : p.level().players()) pool.add(o2);
+        if (wantMobs) pool.addAll(p.level().getEntitiesOfClass(Mob.class, p.getBoundingBox().inflate(r), e -> true));
+        if (obj && c.l2dObjItems) pool.addAll(p.level().getEntitiesOfClass(ItemEntity.class, p.getBoundingBox().inflate(r), e -> true));
         for (Entity e : pool) {
             if (e == p || !e.isAlive() || e.isRemoved()) continue;
             if (e.distanceToSqr(p) > r * r) continue;
             String why = reject(mc, p, cam, e, c);
             if (why == null && c.l2dLookLos && !lineOfSight(p, eye, e)) why = "los";
             if (why != null) { skip.merge(why, 1, Integer::sum); continue; }
-            Vec3 t = e.getEyePosition();
-            LookLogic.Cand cd = new LookLogic.Cand(e.getId(), t.x - eye.x, t.y - eye.y, t.z - eye.z);
-            cands.add(cd); byId.put(e.getId(), e);
+            String kind = e instanceof Player ? "player" : e instanceof ItemEntity ? "item" : "mob";
+            Vec3 t = e instanceof ItemEntity ? e.position().add(0, 0.25, 0) : e.getEyePosition();
+            Target tg = new Target(e.getId(), t, kind);
+            String grp = !obj ? "main" : "player".equals(kind) ? "players" : "item".equals(kind) ? "items" : "mobs";
+            groups.computeIfAbsent(grp, k -> new ArrayList<>()).add(new LookLogic.Cand(e.getId(), t.x - eye.x, t.y - eye.y, t.z - eye.z));
+            byId.put(e.getId(), tg); ELIGIBLE.put(e.getId(), tg);
         }
-        int id = LookLogic.pick(cands, o, yaw, pitch, byId.containsKey(current) ? current : -1);
+        // the block being mined (its middle), when looking at objects
+        if (obj && c.l2dObjMining && mc.gameMode != null && mc.gameMode.isDestroying() && mc.hitResult instanceof BlockHitResult bh && bh.getType() == HitResult.Type.BLOCK) {
+            Vec3 t = Vec3.atCenterOf(bh.getBlockPos());
+            if (t.distanceToSqr(eye) <= r * r) {
+                groups.computeIfAbsent("mining", k -> new ArrayList<>()).add(new LookLogic.Cand(MINING_ID, t.x - eye.x, t.y - eye.y, t.z - eye.z));
+                byId.put(MINING_ID, new Target(MINING_ID, t, "block"));
+            }
+        }
+        List<String> seq = new ArrayList<>();
+        if (!obj) seq.add("main");
+        else { seq.add("players"); for (String k : LookLogic.order(c.l2dObjOrder).split(",")) seq.add(k); }
+        int id = -1;
+        for (String k : seq) {
+            List<LookLogic.Cand> g = groups.get(k);
+            if (g == null || g.isEmpty()) continue;
+            boolean has = false; for (LookLogic.Cand cd : g) if (cd.id == current) { has = true; break; }
+            id = LookLogic.pick(g, o, yaw, pitch, has ? current : -1);
+            if (id != -1) break;
+        }
         current = id;
         skipped = Map.copyOf(skip);
-        Entity tgt = id < 0 ? null : byId.get(id);
-        if (tgt == null) { targetName = ""; targetScreen = null; return null; }
-        targetName = tgt.getName().getString();
-        Vec3 t = tgt.getEyePosition();
+        Target tgt = id == -1 ? null : byId.get(id);
+        if (tgt == null) { current = -1; targetName = ""; targetScreen = null; return null; }
+        targetName = tgt.kind;
+        Vec3 t = tgt.pos;
         targetScreen = LookLogic.project(t.x - eye.x, t.y - eye.y, t.z - eye.z, yaw, pitch, o.viewFov, o.aspect);
         return tgt;
+    }
+
+    /** 1.9.0 damage snap: the attacker as a target only if it passes every privacy filter, the range and (if on) line of sight */
+    public static Target eligibleEntity(Minecraft mc, LocalPlayer p, WheelConfig c, Entity e) {
+        if (e == null || e == p || !e.isAlive() || e.isRemoved() || p == null) return null;
+        if (e.distanceToSqr(p) > (double) c.l2dLookRadius * c.l2dLookRadius) return null;
+        if (reject(mc, p, mc.getCameraEntity(), e, c) != null) return null;
+        Vec3 eye = p.getEyePosition();
+        if (c.l2dLookLos && !lineOfSight(p, eye, e)) return null;
+        return new Target(e.getId(), e.getEyePosition(), e instanceof Player ? "player" : "mob");
     }
 
     /** null = can be a target, else the reason it is skipped */

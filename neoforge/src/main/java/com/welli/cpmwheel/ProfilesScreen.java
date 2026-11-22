@@ -41,6 +41,16 @@ public class ProfilesScreen extends Screen {
             WheelConfig.get().save(); pr.links.remove(model); WheelConfig.saveProfiles(); WheelConfig.reloadProfile(); WheelConfig.get();
             status = "\u2714"; rebuildWidgets(); }).bounds(x, y, w, 20).build());
         un.active = linked != null; y += 26;
+        // 1.9.0 export / import (files in config/cpmwheel/export and config/cpmwheel/import)
+        addRenderableWidget(net.minecraft.client.gui.components.Button.builder(Component.translatable("cpmwheel.pio.export"), b -> {
+            try { var f = ProfileIO.export(name.getValue()); status = Component.translatable("cpmwheel.pio.exported", f.getFileName().toString()).getString(); }
+            catch (Exception e) { status = Component.translatable("cpmwheel.pio.err.write", e.getClass().getSimpleName()).getString(); }
+            }).tooltip(MiniScreen.tip("cpmwheel.pio.export.help")).bounds(x, y, w, 20).build()); y += 22;
+        addRenderableWidget(net.minecraft.client.gui.components.Button.builder(Component.translatable("cpmwheel.pio.open"), b -> minecraft.setScreen(new ProfileImportScreen(this, WheelConfig.get())))
+                .tooltip(MiniScreen.tip("cpmwheel.pio.open.help")).bounds(x, y, w, 20).build()); y += 22;
+        addRenderableWidget(net.minecraft.client.gui.components.Button.builder(Component.translatable("cpmwheel.pio.openexport"), b -> {
+            try { java.nio.file.Files.createDirectories(ProfileIO.exportDir()); net.minecraft.Util.getPlatform().openFile(ProfileIO.exportDir().toFile()); } catch (Exception ignored) {} })
+                .bounds(x, y, w, 20).build()); y += 22;
         List<String> names = WheelConfig.profileNames();
         int x2 = x + w + 12;
         int yy = 40;

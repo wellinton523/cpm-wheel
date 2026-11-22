@@ -293,7 +293,7 @@ public class WheelConfig {
     public String centerMode = "player";
     /** center size in percent (50-200) */
     public int centerSize = 100;
-    public int configVersion = 26;
+    public int configVersion = 27;
     /** 1.6.0 global switches: extra trigger conditions, timed transitions, custom sounds (per-button / per-rule sounds) */
     public boolean trigCondsOn = true, trigTransOn = true, customSounds = true;
     /** 1.7.0 "Física Live2D": chains of CPM value layers driven by spring physics */
@@ -321,6 +321,27 @@ public class WheelConfig {
      *  return-to-centre delay (ms), softer move after a target change (ms) */
     public String l2dLookSmooth = "spring";
     public int l2dLookRespMs = 150, l2dLookMaxSpeed = 720, l2dLookSaccade = 0, l2dLookReturnMs = 600, l2dLookSwitchMs = 250;
+    /** 1.8.4 eye-aim overlay (off by default): small marker where the eyes point (smoothed), faint ghost of the raw aim,
+     *  bracket on the chosen target (never its name), optional area outline and state label; size (px), opacity (%), colour */
+    public boolean l2dEyeOv = false, l2dEyeOvArea = true, l2dEyeOvLabel = true, l2dEyeOvGhost = true;
+    public int l2dEyeOvSize = 6, l2dEyeOvAlpha = 85, l2dEyeOvColor = 0x2EE6FF;
+    /** 1.9.0 extras of the eyes, each off until turned on:
+     *  glances: a quick look at a newly appeared eligible target, then back (duration ms, cooldown ms, chance %) */
+    public boolean l2dGlanceOn = false;
+    public int l2dGlanceMs = 350, l2dGlanceCdMs = 4000, l2dGlanceChance = 60;
+    /** damage reaction: squint / blink (strength % of the blink layers, duration ms) and a quick snap toward the attacker (if eligible) */
+    public boolean l2dHurtOn = false, l2dHurtSnap = true;
+    public int l2dHurtPct = 80, l2dHurtMs = 450, l2dHurtSnapMs = 600;
+    /** context blink rate (multipliers in %, 100 = unchanged): bright daylight, underwater, rain / sand, aiming (bow, crossbow, trident, spyglass) */
+    public boolean l2dCtxOn = false;
+    public int l2dCtxBright = 150, l2dCtxWater = 220, l2dCtxRain = 140, l2dCtxAim = 35;
+    /** look at objects when no eligible player: dropped items, the block being mined, mobs; priority order */
+    public boolean l2dObjOn = false, l2dObjItems = true, l2dObjMining = true, l2dObjMobs = true;
+    public String l2dObjOrder = "mining,items,mobs";
+    /** idle: after N s without input the eyes wander (amplitude °, new point every ms) and blinks get slower / sleepy
+     *  (rate %, closing/opening time %, eyelid droop % of the blink layers) */
+    public boolean l2dIdleOn = false;
+    public int l2dIdleSec = 20, l2dIdleWander = 14, l2dIdleWanderMs = 2200, l2dIdleBlinkPct = 60, l2dIdleSlowPct = 180, l2dIdleDroop = 25;
     public List<Live2dMath.Gen> l2dGens = new ArrayList<>();
     /** 1.8.0 "Teclas de emotes": animation per key slot (key.cpmwheel.emote1..8, set in Controls); off by default */
     public boolean emoteKeysOn = false;
@@ -409,6 +430,14 @@ public class WheelConfig {
     private transient String myKey;
 
     private static Path dir() { return FMLPaths.CONFIGDIR.get().resolve("cpmwheel"); }
+    /** 1.9.0 profile export / import helpers */
+    static Path cfgDir() { return dir(); }
+    static Gson gson() { return GSON; }
+    static Path profileFile(String name) { return file("@" + name); }
+    /** the active config key ("@name" for a named profile, else the model key) */
+    public static String activeKey() { return currentKey; }
+    /** forget the loaded config WITHOUT saving it (after an import replaced its file) */
+    static void dropCurrent() { current = null; }
 
     private static Path file(String key) {
         if (ProfileLogic.isProfile(key)) return dir().resolve("profiles").resolve(ProfileLogic.clean(key.substring(1)) + ".json");
@@ -480,61 +509,74 @@ public class WheelConfig {
             if (!Files.exists(f) && ProfileLogic.isProfile(key)) f = file(model);   // a new profile starts from this model's own settings
             if (!Files.exists(f) && !key.equals("default")) f = file("default");
             if (Files.exists(f)) {
-                WheelConfig c = GSON.fromJson(Files.readString(f, StandardCharsets.UTF_8), WheelConfig.class);
-                if (c != null && c.pages != null && !c.pages.isEmpty()) {
-                    if (c.configVersion < 2) { // 1.2.0 had hover preview on by default and it changed the real model
-                        c.previewOnHover = false;
-                        if (!c.livePreview) c.centerMode = "icon";
-                        c.configVersion = 2;
-                    }
-                    if (c.configVersion < 3) { c.design = "classic"; c.theme = "auto"; c.configVersion = 3; }
-                    if (c.configVersion < 4) { // 1.4.1: page colours + distinct folder colours for the grouped HUD
-                        c.hudGrouped = true;
-                        for (Page pg : c.pages) if (pg.color == 0) pg.color = 0x2EE6FF;
-                        int n = 0;
-                        for (Slot sl : c.allSlots()) if (sl.isFolder() && sl.color == 0x2EE6FF) sl.color = folderColor(n++);
-                        c.configVersion = 4;
-                    }
-                    if (c.configVersion < 7) c.innerRing = false; // 1.4.4: center ring off once on upgrade
-                    if (c.configVersion < 15) c.configVersion = 15; // 1.5.6: arm overrides per item/mod stored in haItem as "arm/<key>"
-                    if (c.configVersion < 14) { c.configVersion = 14; c.haItemOn = true; } // 1.5.5: per-item/per-mod overrides + flatblock category
-                    if (c.configVersion < 13) c.configVersion = 13; // 1.5.4: haFlat + haArm (new fields, empty = defaults)
-                    if (c.configVersion < 12) { c.configVersion = 12; c.haTwoHandBlock = false; } // 1.5.3: blocks held with one hand by default
-                    if (c.configVersion < 11) c.configVersion = 11; // 1.5.0: hand animations (new fields, defaults on, set in fixup)
-                    if (c.configVersion < 10) c.configVersion = 10; // 1.4.7: handGlow (default auto, set in fixup) // 1.4.6: group members -> actions (fixup), keybinds, conditional slots // 1.4.5: group slots (new fields, default none)
-                    if (c.configVersion < 6) c.configVersion = 6; // 1.4.2: design id rename + per-slot displayMode (defaults to "") handled in fixup()
-                    if (c.configVersion < 16) { c.configVersion = 16; c.haWorldArm = "on"; c.haWorldDepth = 40; c.effOn = true; } // 1.5.7: world-pass arm (Better Combat method) on, item groups, effect triggers
-                    if (c.configVersion < 17) { c.configVersion = 17; c.toastOn = true; c.toastSecs = 4; c.toastOpacity = 85; c.toastMini = true; c.hudSnap = true;
-                        if (c.effRules != null) for (EffectRule r : c.effRules) if (r != null) r.lock = true; } // 1.5.8: query groups, physics, movable HUD (list position from the old corner), toasts, trigger lock
-                    if (c.configVersion < 18) c.configVersion = 18; // 1.5.9: physics with gravity (old arrays upgraded in fixup), "Igual nas duas mãos"
-                    if (c.configVersion < 19) { c.configVersion = 19; c.trigCondsOn = true; c.trigTransOn = true; c.customSounds = true; // 1.6.0: effect rules -> condition lists
-                        if (c.effRules != null) for (EffectRule r : c.effRules) if (r != null) migrateRule(r); }
-                    if (c.configVersion < 20) { c.configVersion = 20; c.l2dOn = false; c.l2dSync = true; c.l2dPauseTrig = true; } // 1.7.0: Física Live2D (off by default)
-                    if (c.configVersion < 21) { c.configVersion = 21; // 1.7.1: one input per link -> weighted input list (100 %)
-                        if (c.l2dChains != null) for (Live2dMath.Chain ch : c.l2dChains) if (ch != null && ch.links != null) for (Live2dMath.Link l : ch.links) if (l != null) Live2dMath.migrateLink(l); }
-                    if (c.configVersion < 22) { c.configVersion = 22; // 1.7.2: "Desativar quando" (empty = never) + fade 0.3 s
-                        if (c.l2dChains != null) for (Live2dMath.Chain ch : c.l2dChains) if (ch != null) { if (ch.off == null) ch.off = new ArrayList<>(); if (ch.fadeMs <= 0) ch.fadeMs = 300; } }
-                    if (c.configVersion < 23) { c.configVersion = 23; // 1.7.3: velocity inputs hold the link displaced (75 %), angles unchanged
-                        if (c.l2dChains != null) for (Live2dMath.Chain ch : c.l2dChains) if (ch != null && ch.links != null) for (Live2dMath.Link l : ch.links) Live2dMath.migrateHold(l); }
-                    if (c.configVersion < 24) { c.configVersion = 24; // 1.8.0: new extras off; item / arm positions still on the old defaults (0) use the new ones
-                        c.l2dWindOn = c.l2dImpactOn = c.l2dLookOn = c.l2dVoiceOn = c.l2dLayerOn = c.l2dGenOn = false; c.emoteKeysOn = false; c.chainTrigOn = false;
-                        if (c.haAdj != null) c.haAdj.entrySet().removeIf(e -> DEF_ADJ.containsKey(e.getKey()) && allZero(e.getValue()));
-                        if (c.haArm != null) c.haArm.entrySet().removeIf(e -> DEF_ARM.containsKey(e.getKey()) && allZero(e.getValue())); }
-                    if (c.configVersion < 25) { c.configVersion = 25; // 1.8.1: Emotecraft bridge, off until turned on
-                        c.ecOn = false; c.ecL2d = "none"; c.ecKick = 30; }
-                    if (c.configVersion < 26) { c.configVersion = 26; // 1.8.3: look-at targets keep the old choice, privacy filters on, screen-area mode
-                        c.l2dLookTargets = c.l2dLookPlayers ? "players" : "both"; c.l2dLookMode = "screen";
-                        c.l2dLookSafeCam = c.l2dLookHideHidden = c.l2dLookVanishTag = c.l2dLookLos = true; c.l2dLookDebug = false; }
-                    c.fixup();
-                    if (c.centerMode == null || c.centerMode.isBlank()) c.centerMode = "player";
-                    if (c.hudCorner == null || c.hudCorner.isBlank()) c.hudCorner = "top_left";
-                    if (c.hudScale <= 0) c.hudScale = 100;
-                    c.centerSize = Math.max(50, Math.min(200, c.centerSize <= 0 ? 100 : c.centerSize));
-                    return c;
-                }
+                WheelConfig c = parse(Files.readString(f, StandardCharsets.UTF_8));
+                if (c != null) return c;
             }
         } catch (Exception e) { CpmWheel.LOG.warn("[CPM Wheel] config load failed", e); }
         return autoFill();
+    }
+
+    /** 1.9.0: config JSON -> migrated + fixed config, or null when it isn't a valid CPM Wheel config (used by load and import) */
+    public static WheelConfig parse(String json) {
+        WheelConfig c = GSON.fromJson(json, WheelConfig.class);
+        if (c != null && c.pages != null && !c.pages.isEmpty()) {
+            if (c.configVersion < 2) { // 1.2.0 had hover preview on by default and it changed the real model
+                c.previewOnHover = false;
+                if (!c.livePreview) c.centerMode = "icon";
+                c.configVersion = 2;
+            }
+            if (c.configVersion < 3) { c.design = "classic"; c.theme = "auto"; c.configVersion = 3; }
+            if (c.configVersion < 4) { // 1.4.1: page colours + distinct folder colours for the grouped HUD
+                c.hudGrouped = true;
+                for (Page pg : c.pages) if (pg.color == 0) pg.color = 0x2EE6FF;
+                int n = 0;
+                for (Slot sl : c.allSlots()) if (sl.isFolder() && sl.color == 0x2EE6FF) sl.color = folderColor(n++);
+                c.configVersion = 4;
+            }
+            if (c.configVersion < 7) c.innerRing = false; // 1.4.4: center ring off once on upgrade
+            if (c.configVersion < 15) c.configVersion = 15; // 1.5.6: arm overrides per item/mod stored in haItem as "arm/<key>"
+            if (c.configVersion < 14) { c.configVersion = 14; c.haItemOn = true; } // 1.5.5: per-item/per-mod overrides + flatblock category
+            if (c.configVersion < 13) c.configVersion = 13; // 1.5.4: haFlat + haArm (new fields, empty = defaults)
+            if (c.configVersion < 12) { c.configVersion = 12; c.haTwoHandBlock = false; } // 1.5.3: blocks held with one hand by default
+            if (c.configVersion < 11) c.configVersion = 11; // 1.5.0: hand animations (new fields, defaults on, set in fixup)
+            if (c.configVersion < 10) c.configVersion = 10; // 1.4.7: handGlow (default auto, set in fixup) // 1.4.6: group members -> actions (fixup), keybinds, conditional slots // 1.4.5: group slots (new fields, default none)
+            if (c.configVersion < 6) c.configVersion = 6; // 1.4.2: design id rename + per-slot displayMode (defaults to "") handled in fixup()
+            if (c.configVersion < 16) { c.configVersion = 16; c.haWorldArm = "on"; c.haWorldDepth = 40; c.effOn = true; } // 1.5.7: world-pass arm (Better Combat method) on, item groups, effect triggers
+            if (c.configVersion < 17) { c.configVersion = 17; c.toastOn = true; c.toastSecs = 4; c.toastOpacity = 85; c.toastMini = true; c.hudSnap = true;
+                if (c.effRules != null) for (EffectRule r : c.effRules) if (r != null) r.lock = true; } // 1.5.8: query groups, physics, movable HUD (list position from the old corner), toasts, trigger lock
+            if (c.configVersion < 18) c.configVersion = 18; // 1.5.9: physics with gravity (old arrays upgraded in fixup), "Igual nas duas mãos"
+            if (c.configVersion < 19) { c.configVersion = 19; c.trigCondsOn = true; c.trigTransOn = true; c.customSounds = true; // 1.6.0: effect rules -> condition lists
+                if (c.effRules != null) for (EffectRule r : c.effRules) if (r != null) migrateRule(r); }
+            if (c.configVersion < 20) { c.configVersion = 20; c.l2dOn = false; c.l2dSync = true; c.l2dPauseTrig = true; } // 1.7.0: Física Live2D (off by default)
+            if (c.configVersion < 21) { c.configVersion = 21; // 1.7.1: one input per link -> weighted input list (100 %)
+                if (c.l2dChains != null) for (Live2dMath.Chain ch : c.l2dChains) if (ch != null && ch.links != null) for (Live2dMath.Link l : ch.links) if (l != null) Live2dMath.migrateLink(l); }
+            if (c.configVersion < 22) { c.configVersion = 22; // 1.7.2: "Desativar quando" (empty = never) + fade 0.3 s
+                if (c.l2dChains != null) for (Live2dMath.Chain ch : c.l2dChains) if (ch != null) { if (ch.off == null) ch.off = new ArrayList<>(); if (ch.fadeMs <= 0) ch.fadeMs = 300; } }
+            if (c.configVersion < 23) { c.configVersion = 23; // 1.7.3: velocity inputs hold the link displaced (75 %), angles unchanged
+                if (c.l2dChains != null) for (Live2dMath.Chain ch : c.l2dChains) if (ch != null && ch.links != null) for (Live2dMath.Link l : ch.links) Live2dMath.migrateHold(l); }
+            if (c.configVersion < 24) { c.configVersion = 24; // 1.8.0: new extras off; item / arm positions still on the old defaults (0) use the new ones
+                c.l2dWindOn = c.l2dImpactOn = c.l2dLookOn = c.l2dVoiceOn = c.l2dLayerOn = c.l2dGenOn = false; c.emoteKeysOn = false; c.chainTrigOn = false;
+                if (c.haAdj != null) c.haAdj.entrySet().removeIf(e -> DEF_ADJ.containsKey(e.getKey()) && allZero(e.getValue()));
+                if (c.haArm != null) c.haArm.entrySet().removeIf(e -> DEF_ARM.containsKey(e.getKey()) && allZero(e.getValue())); }
+            if (c.configVersion < 25) { c.configVersion = 25; // 1.8.1: Emotecraft bridge, off until turned on
+                c.ecOn = false; c.ecL2d = "none"; c.ecKick = 30; }
+            if (c.configVersion < 26) { c.configVersion = 26; // 1.8.3: look-at targets keep the old choice, privacy filters on, screen-area mode
+                c.l2dLookTargets = c.l2dLookPlayers ? "players" : "both"; c.l2dLookMode = "screen";
+                c.l2dLookSafeCam = c.l2dLookHideHidden = c.l2dLookVanishTag = c.l2dLookLos = true; c.l2dLookDebug = false; }
+            if (c.configVersion < 27) { c.configVersion = 27; // 1.9.0: eye-aim overlay + eye extras, off until turned on
+                c.l2dEyeOv = false; c.l2dEyeOvArea = true; c.l2dEyeOvLabel = true; c.l2dEyeOvGhost = true;
+                c.l2dEyeOvSize = 6; c.l2dEyeOvAlpha = 85; c.l2dEyeOvColor = 0x2EE6FF;
+                // 1.9.0: glances, damage reaction, context blink, objects, idle: all off until turned on
+                c.l2dGlanceOn = c.l2dHurtOn = c.l2dCtxOn = c.l2dObjOn = c.l2dIdleOn = false; c.l2dHurtSnap = true;
+                c.l2dObjItems = c.l2dObjMining = c.l2dObjMobs = true; c.l2dObjOrder = "mining,items,mobs"; }
+            c.fixup();
+            if (c.centerMode == null || c.centerMode.isBlank()) c.centerMode = "player";
+            if (c.hudCorner == null || c.hudCorner.isBlank()) c.hudCorner = "top_left";
+            if (c.hudScale <= 0) c.hudScale = 100;
+            c.centerSize = Math.max(50, Math.min(200, c.centerSize <= 0 ? 100 : c.centerSize));
+            return c;
+        }
+        return null;
     }
 
     /** auto, distinct folder colours (never the wheel cyan) */
@@ -605,6 +647,13 @@ public class WheelConfig {
         l2dLookOffX = clamp(l2dLookOffX, -50, 50); l2dLookOffY = clamp(l2dLookOffY, -50, 50); l2dLookStickPct = clamp(l2dLookStickPct, 0, 100);
         l2dLookRespMs = clamp(l2dLookRespMs, 0, 2000); l2dLookMaxSpeed = clamp(l2dLookMaxSpeed, 0, 3000); l2dLookSaccade = clamp(l2dLookSaccade, 0, 100);
         l2dLookReturnMs = clamp(l2dLookReturnMs, 0, 5000); l2dLookSwitchMs = clamp(l2dLookSwitchMs, 0, 2000);
+        l2dEyeOvSize = clamp(l2dEyeOvSize, 3, 20); l2dEyeOvAlpha = clamp(l2dEyeOvAlpha, 10, 100); l2dEyeOvColor &= 0xFFFFFF;
+        l2dGlanceMs = clamp(l2dGlanceMs, 100, 2000); l2dGlanceCdMs = clamp(l2dGlanceCdMs, 0, 30000); l2dGlanceChance = clamp(l2dGlanceChance, 0, 100);
+        l2dHurtPct = clamp(l2dHurtPct, 0, 100); l2dHurtMs = clamp(l2dHurtMs, 100, 3000); l2dHurtSnapMs = clamp(l2dHurtSnapMs, 100, 3000);
+        l2dCtxBright = clamp(l2dCtxBright, 10, 500); l2dCtxWater = clamp(l2dCtxWater, 10, 500); l2dCtxRain = clamp(l2dCtxRain, 10, 500); l2dCtxAim = clamp(l2dCtxAim, 0, 500);
+        l2dObjOrder = LookLogic.order(l2dObjOrder);
+        l2dIdleSec = clamp(l2dIdleSec, 3, 600); l2dIdleWander = clamp(l2dIdleWander, 0, 45); l2dIdleWanderMs = clamp(l2dIdleWanderMs, 300, 10000);
+        l2dIdleBlinkPct = clamp(l2dIdleBlinkPct, 10, 300); l2dIdleSlowPct = clamp(l2dIdleSlowPct, 50, 400); l2dIdleDroop = clamp(l2dIdleDroop, 0, 90);
         if (l2dGens == null) l2dGens = new ArrayList<>();
         l2dGens.removeIf(java.util.Objects::isNull);
         while (l2dGens.size() > 8) l2dGens.remove(l2dGens.size() - 1);

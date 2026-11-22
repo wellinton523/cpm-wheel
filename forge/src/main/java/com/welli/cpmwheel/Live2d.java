@@ -51,6 +51,42 @@ public final class Live2d {
     /** 1.8.3 look-at eye state + smoothing settings */
     private static final LookLogic.Eye EYE = new LookLogic.Eye();
     private static final LookLogic.Smooth LOOK_S = new LookLogic.Smooth();
+    /** 1.8.4: {eye yaw, eye pitch (smoothed), raw yaw, raw pitch, 1 = has target} for the eye-aim overlay (null = look-at off) */
+    public static volatile float[] EYE_VIEW = null;
+    public static volatile String eyeState = "off";
+    // 1.9.0 eye extras
+    private static final LookLogic.Glance GLANCE = new LookLogic.Glance();
+    private static final LookLogic.Idle IDLE = new LookLogic.Idle();
+    private static float idleYaw, idlePitch, hurtT = 99, snapLeft, blinkRate = 1, blinkSlow = 1, blinkFloor; private static int hurtPrev, snapId = Integer.MIN_VALUE;
+    private static int ctxTick; private static boolean ctxSand;
+    public static boolean idleNow() { return IDLE.idle; }
+    /** current blink-rate multiplier (context x idle), for the settings screens */
+    public static float blinkRateNow() { return blinkRate; }
+
+    /** 1.9.0 context blink rate: bright daylight, eyes underwater, rain / sand, aiming a bow, crossbow, trident or spyglass */
+    static float contextRate(Minecraft mc, LocalPlayer p, WheelConfig c) {
+        var level = p.level();
+        net.minecraft.core.BlockPos bp = net.minecraft.core.BlockPos.containing(p.getX(), p.getEyeY(), p.getZ());
+        boolean water = p.isEyeInFluid(net.minecraft.tags.FluidTags.WATER);
+        boolean sky = level.canSeeSky(bp);
+        if (ctxTick-- <= 0) { ctxTick = 20; String b = level.getBiome(bp).unwrapKey().map(k -> k.location().getPath()).orElse(""); ctxSand = b.contains("desert") || b.contains("badlands"); }
+        boolean rain = !water && sky && (level.isRainingAt(bp.above()) || (level.isRaining() && ctxSand));
+        boolean bright = !water && !rain && sky && level.isDay() && !level.isRaining();
+        boolean aim = false;
+        if (p.isUsingItem()) {
+            var it = p.getUseItem().getItem();
+            aim = it instanceof net.minecraft.world.item.BowItem || it instanceof net.minecraft.world.item.CrossbowItem
+                    || it instanceof net.minecraft.world.item.TridentItem || it instanceof net.minecraft.world.item.SpyglassItem;
+        }
+        if (!aim) for (var hand : net.minecraft.world.InteractionHand.values()) {
+            var st = p.getItemInHand(hand);
+            if (st.getItem() instanceof net.minecraft.world.item.CrossbowItem && net.minecraft.world.item.CrossbowItem.isCharged(st)) { aim = true; break; }
+        }
+        return LookLogic.ctxRate(bright, water, rain, aim, c.l2dCtxBright, c.l2dCtxWater, c.l2dCtxRain, c.l2dCtxAim);
+    }
+    private static volatile long eyeAt = 0;
+    /** latest eye-aim data, or null when look-at hasn't run for half a second (off, paused, no chains) */
+    public static float[] eyeView() { float[] v = EYE_VIEW; return v != null && System.currentTimeMillis() - eyeAt < 500 ? v : null; }
     /** generator id -> {level, value, max} for the screens */
     private static final Map<String, float[]> LIVEG = new HashMap<>();
     public static float[] liveGen(String id) { return LIVEG.get(id); }
@@ -76,7 +112,7 @@ public final class Live2d {
 
     /** "Zerar física": restart from rest and rewrite every value */
     public static void reset() { STATES.clear(); WRITTEN.clear(); LOCAL.clear(); LIVE.clear(); SHARED.clear(); COMBINED.clear(); WEIGHTS.clear(); inputsInit = false;
-        LSIG.clear(); GSTATE.clear(); EYE.target = -1; EYE.y = EYE.p = EYE.vy = EYE.vp = 0; lookY = lookP = 0; LookTargets.clear(); LIVEG.clear(); HIST.clear(); HIT.v = 0; LAND.v = 0; EMO.v = 0; EMO_EDGE.playing = false; EMO_EDGE.name = ""; }
+        LSIG.clear(); GSTATE.clear(); EYE.target = -1; EYE.y = EYE.p = EYE.vy = EYE.vp = 0; lookY = lookP = 0; LookTargets.clear(); GLANCE.primed = false; GLANCE.id = -1; IDLE.still = 0; IDLE.idle = false; hurtT = 99; snapLeft = 0; LIVEG.clear(); HIST.clear(); HIT.v = 0; LAND.v = 0; EMO.v = 0; EMO_EDGE.playing = false; EMO_EDGE.name = ""; }
 
     /** config changed in a screen */
     public static void use(WheelConfig c) { cfg = c; cfgAt = System.currentTimeMillis(); }
@@ -144,24 +180,63 @@ public final class Live2d {
                 float[] wr = Live2dMath.windRel(w, Live2dMath.windDir(t, 7), body);
                 in.put("windF", wr[0]); in.put("windS", wr[1]);
             }
+            // 1.9.0 idle (no input for N s) and damage edge, shared by the eyes and the blink generators
+            boolean active = Math.abs(Live2dMath.unwrap(0, yaw - idleYaw)) > 0.5f || Math.abs(p.getXRot() - idlePitch) > 0.5f
+                    || dx * dx + dy * dy + dz * dz > 1e-4 || p.swinging || p.isUsingItem() || p.hurtTime > 0;
+            idleYaw = yaw; idlePitch = p.getXRot();
+            boolean idle = c.l2dIdleOn && LookLogic.idle(IDLE, active, 0.05f, c.l2dIdleSec, c.l2dIdleWander, c.l2dIdleWanderMs, RNG);
+            if (!c.l2dIdleOn) { IDLE.still = 0; IDLE.idle = false; }
+            boolean hitNow = p.hurtTime > hurtPrev && hurtPrev == 0; hurtPrev = p.hurtTime;
+            if (c.l2dHurtOn && hitNow) {
+                hurtT = 0;
+                net.minecraft.world.entity.Entity att = null;
+                try { var src = p.getLastDamageSource(); if (src != null) att = src.getEntity(); } catch (Throwable ignored) {}
+                if (att == null) att = p.getLastHurtByMob();
+                snapId = att == null ? Integer.MIN_VALUE : att.getId(); snapLeft = c.l2dHurtSnap && att != null ? c.l2dHurtSnapMs / 1000f : 0;
+            }
+            hurtT += 0.05f;
             if (c.l2dLookOn) {
                 // 1.8.3: target from the real player's view (never the camera) with privacy filters, then smoothed eyes
-                var tgt = LookTargets.find(mc, p, c);
-                boolean has = false; float ty = 0, tp = 0;
-                if (tgt != null) {
-                    var e = p.getEyePosition(); var o = tgt.getEyePosition();
-                    float[] la = Live2dMath.lookAngles(o.x - e.x, o.y - e.y, o.z - e.z, yaw, p.getXRot(), c.l2dLookMaxYaw);
-                    if (la[2] > 0) { ty = la[0]; tp = la[1]; has = true; }
+                LookTargets.Target tgt = LookTargets.find(mc, p, c), use = tgt;
+                int mainId = tgt == null ? -1 : tgt.id;
+                String extra = null;
+                // 1.9.0 glance at a newly appeared eligible target, then back
+                if (c.l2dGlanceOn) {
+                    int gid = LookLogic.glance(GLANCE, LookTargets.ELIGIBLE.keySet(), mainId, c.l2dGlanceMs, c.l2dGlanceCdMs, c.l2dGlanceChance, 0.05f, RNG);
+                    LookTargets.Target gt = gid == -1 ? null : LookTargets.ELIGIBLE.get(gid);
+                    if (gt != null) { use = gt; extra = "glance"; }
+                } else { GLANCE.primed = false; GLANCE.id = -1; }
+                // 1.9.0 damage: quick snap toward the attacker, only if it passes every filter
+                if (c.l2dHurtOn && snapLeft > 0) {
+                    snapLeft -= 0.05f;
+                    LookTargets.Target st = LookTargets.eligibleEntity(mc, p, c, level.getEntity(snapId));
+                    if (st != null) { use = st; extra = "hurt"; } else snapLeft = 0;
                 }
-                int tid = has ? tgt.getId() : -1;
+                boolean has = false; float ty = 0, tp = 0; int tid = -1;
+                if (use != null) {
+                    var e = p.getEyePosition(); var o = use.pos;
+                    float[] la = Live2dMath.lookAngles(o.x - e.x, o.y - e.y, o.z - e.z, yaw, p.getXRot(), c.l2dLookMaxYaw);
+                    if (la[2] > 0) { ty = la[0]; tp = la[1]; has = true; tid = use.id; }
+                }
+                if (!has && idle && c.l2dIdleWander > 0) { ty = IDLE.wy; tp = IDLE.wp; has = true; tid = -2; extra = "wander"; }   // 1.9.0 idle wander
                 boolean switched = has && EYE.target >= 0 && tid != EYE.target;
                 if (has) EYE.target = tid;
                 LOOK_S.mode = c.l2dLookSmooth; LOOK_S.respMs = c.l2dLookRespMs; LOOK_S.maxSpeed = c.l2dLookMaxSpeed;
                 LOOK_S.saccade = c.l2dLookSaccade; LOOK_S.returnMs = c.l2dLookReturnMs; LOOK_S.switchMs = c.l2dLookSwitchMs;
+                if ("hurt".equals(extra) || "glance".equals(extra)) { LOOK_S.respMs = Math.min(LOOK_S.respMs, "hurt".equals(extra) ? 50 : 90); LOOK_S.switchMs = 0; switched = false; }
                 float[] lk = LookLogic.step(EYE, has, ty, tp, switched, LOOK_S, 0.05f, RNG);
                 lookY = lk[0]; lookP = lk[1];
+                // 1.8.4 eye-aim overlay: smoothed angles (what the eyes show), raw aim, state
+                EYE_VIEW = new float[]{lookY, lookP, has ? ty : 0, has ? tp : 0, has && tid != -2 ? 1 : 0};
+                eyeState = extra != null ? extra : LookLogic.state(EYE, LOOK_S, has); eyeAt = System.currentTimeMillis();
                 in.put("lookYaw", lookY); in.put("lookPitch", lookP);
-            } else if (EYE.target >= 0 || lookY != 0 || lookP != 0) { EYE.target = -1; EYE.y = EYE.p = EYE.vy = EYE.vp = 0; lookY = lookP = 0; LookTargets.clear(); }
+            } else { EYE_VIEW = null; eyeState = "off"; if (EYE.target >= 0 || lookY != 0 || lookP != 0) { EYE.target = -1; EYE.y = EYE.p = EYE.vy = EYE.vp = 0; lookY = lookP = 0; LookTargets.clear(); } }
+            // 1.9.0 blink modifiers: context rate, idle (slower, sleepy droop), damage squint
+            float bRate = 1, bSlow = 1, bFloor = 0;
+            if (c.l2dCtxOn) bRate *= contextRate(mc, p, c);
+            if (idle) { bRate *= c.l2dIdleBlinkPct / 100f; bSlow = c.l2dIdleSlowPct / 100f; bFloor = c.l2dIdleDroop / 100f; }
+            if (c.l2dHurtOn) bFloor = Math.max(bFloor, LookLogic.hurtLevel(hurtT, c.l2dHurtMs / 1000f) * c.l2dHurtPct / 100f);
+            blinkRate = bRate; blinkSlow = bSlow; blinkFloor = bFloor;
             if (c.l2dVoiceOn) {
                 float lv = VoiceBridge.level(p.getUUID());
                 if (lv < 0) lv = 0.35f + 0.65f * Math.abs((float) Math.sin(now / 1000.0 * 2 * Math.PI * 4.5)) * (0.7f + 0.3f * (float) Math.sin(now / 1000.0 * 7.3)); // talking: flap
@@ -228,7 +303,10 @@ public final class Live2d {
             if (gens) for (Live2dMath.Gen g : c.l2dGens) {
                 if (!g.on || g.anim.isBlank()) continue;
                 Live2dMath.GenState gs = GSTATE.computeIfAbsent(g.id + "|" + g.kind, k -> new Live2dMath.GenState());
+                boolean isBlink = "blink".equals(g.kind);
+                gs.rate = isBlink ? blinkRate : 1; gs.slow = isBlink ? blinkSlow : 1;
                 float lv = Live2dMath.stepGen(g, gs, 0.05f, RNG);
+                if (isBlink) lv = Math.max(lv, blinkFloor);   // 1.9.0 sleepy droop / damage squint
                 int max = CpmBridge.maxValue(g.anim);
                 int v = Live2dMath.genValue(g, lv, max);
                 LIVEG.put(g.id, new float[]{lv, v, max});

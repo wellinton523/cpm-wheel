@@ -118,6 +118,98 @@ public final class LookLogic {
         return best;
     }
 
+    // ---------- 1.8.4 eye-aim overlay ----------
+    /** unit offset of where the eyes point: head direction turned by the eye angles (eye yaw + = right, eye pitch + = down) */
+    public static double[] aimDir(float headYaw, float headPitch, float eyeYaw, float eyePitch) {
+        double y = Math.toRadians(headYaw + eyeYaw), p = Math.toRadians(Math.max(-90, Math.min(90, headPitch + eyePitch)));
+        return new double[]{-Math.sin(y) * Math.cos(p), -Math.sin(p), Math.cos(y) * Math.cos(p)};
+    }
+    /** screen point (% from the centre, + right / + up) of the eye aim seen from the player's own view, or null if behind */
+    public static float[] aimScreen(float headYaw, float headPitch, float eyeYaw, float eyePitch, float viewYaw, float viewPitch, float vfov, float aspect) {
+        double[] d = aimDir(headYaw, headPitch, eyeYaw, eyePitch);
+        return project(d[0] * 10, d[1] * 10, d[2] * 10, viewYaw, viewPitch, vfov, aspect);
+    }
+    /** "target" (following), "hold" (target lost, waiting), "centering" (going back), "idle" (centred, no target);
+     *  Live2d adds "glance", "hurt" and "wander" on top */
+    public static String state(Eye e, Smooth s, boolean hasTarget) {
+        if (hasTarget) return "target";
+        if (e.lost * 1000f < Math.max(0, s.returnMs) && (Math.abs(e.holdY) + Math.abs(e.holdP) > 0.5f)) return "hold";
+        if (Math.abs(e.y) + Math.abs(e.p) > 0.5f) return "centering";
+        return "idle";
+    }
+
+    // ---------- 1.9.0 look at objects: priority order ----------
+    public static final String[] ORDERS = {"mining,items,mobs", "mining,mobs,items", "items,mining,mobs", "items,mobs,mining", "mobs,mining,items", "mobs,items,mining"};
+    public static String order(String o) { for (String k : ORDERS) if (k.equals(o)) return k; return ORDERS[0]; }
+    public static String nextOrder(String o) { String n = order(o); for (int i = 0; i < ORDERS.length; i++) if (ORDERS[i].equals(n)) return ORDERS[(i + 1) % ORDERS.length]; return ORDERS[0]; }
+
+    // ---------- 1.9.0 glances ----------
+    public static final class Glance { public final java.util.Set<Integer> seen = new java.util.HashSet<>(); public int id = -1; public float left, cd; public boolean primed; }
+    /** a quick look at an eligible target that just appeared (not the main one): returns its id while the glance lasts, else -1.
+     *  Targets already around when it starts, or that come back while on cooldown, don't count. */
+    public static int glance(Glance g, java.util.Set<Integer> eligible, int current, int ms, int cdMs, int chance, float dt, Random r) {
+        g.cd -= dt;
+        if (g.id >= 0) {
+            g.left -= dt;
+            if (g.left <= 0 || !eligible.contains(g.id) || g.id == current) { g.id = -1; g.cd = Math.max(0, cdMs) / 1000f; }
+        }
+        if (!g.primed) { g.primed = true; g.seen.clear(); g.seen.addAll(eligible); return g.id; }
+        if (g.id < 0 && g.cd <= 0) {
+            for (int e : eligible) {
+                if (g.seen.contains(e) || e == current) continue;
+                if (r == null || r.nextFloat() * 100f < Math.max(0, Math.min(100, chance))) { g.id = e; g.left = Math.max(50, ms) / 1000f; }
+                else g.cd = Math.max(0, cdMs) / 1000f;   // a missed roll also waits for the cooldown
+                break;
+            }
+        }
+        g.seen.clear(); g.seen.addAll(eligible);
+        return g.id;
+    }
+
+    // ---------- 1.9.0 damage reaction ----------
+    /** squint level 0..1, t seconds after the hit, over dur seconds: snaps shut in 60 ms, holds briefly, eases open */
+    public static float hurtLevel(float t, float dur) {
+        if (t < 0 || t >= dur) return 0;
+        float close = Math.min(0.06f, dur * 0.2f), hold = Math.min(0.08f, dur * 0.2f);
+        if (t < close) return t / close;
+        if (t < close + hold) return 1;
+        float u = (t - close - hold) / Math.max(1e-3f, dur - close - hold);
+        u = Math.max(0, Math.min(1, u));
+        return 1 - u * u * (3 - 2 * u);
+    }
+
+    // ---------- 1.9.0 context blink rate ----------
+    /** blink rate multiplier from the active conditions (each multiplier in %, 100 = unchanged), clamped 0.05 .. 6 */
+    public static float ctxRate(boolean bright, boolean water, boolean rain, boolean aim, int brightPct, int waterPct, int rainPct, int aimPct) {
+        float m = 1;
+        if (bright) m *= brightPct / 100f;
+        if (water) m *= waterPct / 100f;
+        if (rain) m *= rainPct / 100f;
+        if (aim) m *= aimPct / 100f;
+        return Math.max(0.05f, Math.min(6f, m));
+    }
+
+    // ---------- 1.9.0 idle ----------
+    public static final class Idle { public float still, wanderT, wy, wp; public boolean idle; }
+    /** counts seconds without activity; once idle, picks a new wander point (±amp yaw, ±amp/2 pitch) every ~wanderMs */
+    public static boolean idle(Idle d, boolean active, float dt, int idleSec, int amp, int wanderMs, Random r) {
+        if (active) { d.still = 0; d.idle = false; d.wanderT = 0; d.wy = d.wp = 0; return false; }
+        d.still += dt;
+        boolean now = d.still >= Math.max(1, idleSec);
+        if (now && !d.idle) d.wanderT = 0;
+        d.idle = now;
+        if (now) {
+            d.wanderT -= dt;
+            if (d.wanderT <= 0) {
+                float a = Math.max(0, amp);
+                d.wy = r == null ? 0 : (r.nextFloat() * 2 - 1) * a;
+                d.wp = r == null ? 0 : (r.nextFloat() * 2 - 1) * a * 0.5f;
+                d.wanderT = Math.max(300, wanderMs) / 1000f * (r == null ? 1 : 0.6f + r.nextFloat() * 0.8f);
+            }
+        }
+        return now;
+    }
+
     // ---------- smoothing ----------
     public static final class Smooth {
         /** "spring" (critically damped), "lerp" (exponential) or "off" */
