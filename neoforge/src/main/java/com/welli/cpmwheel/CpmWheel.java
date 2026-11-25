@@ -51,6 +51,12 @@ public class CpmWheel {
         NeoForge.EVENT_BUS.addListener((ClientTickEvent.Pre e) -> Live2d.tickStart(Minecraft.getInstance()));
         HandAnim.detectConflicts(id -> ModList.get().isLoaded(id));
         NeoForge.EVENT_BUS.addListener((net.neoforged.neoforge.client.event.RenderFrameEvent.Pre e) -> HandAnim.frameStart());
+        // 1.9.2 "Movimento no mundo": read the real pose of the local player right after it is drawn in the world pass
+        NeoForge.EVENT_BUS.addListener((net.neoforged.neoforge.client.event.RenderLevelStageEvent e) -> {
+            if (e.getStage() == net.neoforged.neoforge.client.event.RenderLevelStageEvent.Stage.AFTER_SOLID_BLOCKS) PartTrack.inWorld = true;
+            else if (e.getStage() == net.neoforged.neoforge.client.event.RenderLevelStageEvent.Stage.AFTER_ENTITIES) PartTrack.inWorld = false; });
+        NeoForge.EVENT_BUS.addListener((net.neoforged.neoforge.client.event.RenderFrameEvent.Pre e) -> PartTrack.inWorld = false);
+        NeoForge.EVENT_BUS.addListener((net.neoforged.neoforge.client.event.RenderPlayerEvent.Post e) -> PartTrack.capture(e.getEntity(), e.getRenderer().getModel()));
         NeoForge.EVENT_BUS.addListener((net.neoforged.neoforge.client.event.RenderLevelStageEvent e) -> {
             if (e.getStage() == net.neoforged.neoforge.client.event.RenderLevelStageEvent.Stage.AFTER_ENTITIES)
                 WorldArm.afterEntities(e.getPoseStack(), e.getCamera(), e.getPartialTick().getGameTimeDeltaPartialTick(true)); });

@@ -100,6 +100,17 @@ public final class Live2d {
     private static int histIdx = 0;
     public static float[][] history(String chainId, int i) { return HIST.get(chainId + "#" + i); }
     public static int historyIndex() { return histIdx; }
+    // ---------- 1.9.2 real world motion of each chain's anchor ----------
+    private static final Map<String, Live2dMath.State[]> INERT = new HashMap<>();
+    private static final Map<String, Integer> INERT_EP = new HashMap<>();
+    /** chainId -> {forward, right, up (blocks/s, everything the anchor does), inertia angle of link 1} for the screens */
+    private static final Map<String, float[]> WLIVE = new HashMap<>();
+    public static float[] worldLive(String chainId) { return WLIVE.get(chainId); }
+    /** -Dcpmwheel.debugWorld=true: logs each chain's anchor and motion once a second (troubleshooting only) */
+    private static final boolean WORLD_DEBUG = Boolean.getBoolean("cpmwheel.debugWorld");
+    /** "Empurrão no mundo" in the preview: a short sideways shove of every anchor */
+    public static void simWorldKick() { PartTrack.simKick(); }
+
     /** last input values (for the preview screen) */
     private static volatile Map<String, Float> lastIn = Map.of();
     public static Map<String, Float> inputs() { return lastIn; }
@@ -111,7 +122,7 @@ public final class Live2d {
     public static boolean failed() { return failed; }
 
     /** "Zerar física": restart from rest and rewrite every value */
-    public static void reset() { STATES.clear(); WRITTEN.clear(); LOCAL.clear(); LIVE.clear(); SHARED.clear(); COMBINED.clear(); WEIGHTS.clear(); inputsInit = false;
+    public static void reset() { INERT.clear(); INERT_EP.clear(); WLIVE.clear(); PartTrack.reset(); STATES.clear(); WRITTEN.clear(); LOCAL.clear(); LIVE.clear(); SHARED.clear(); COMBINED.clear(); WEIGHTS.clear(); inputsInit = false;
         LSIG.clear(); GSTATE.clear(); EYE.target = -1; EYE.y = EYE.p = EYE.vy = EYE.vp = 0; lookY = lookP = 0; LookTargets.clear(); GLANCE.primed = false; GLANCE.id = -1; IDLE.still = 0; IDLE.idle = false; hurtT = 99; snapLeft = 0; LIVEG.clear(); HIST.clear(); HIT.v = 0; LAND.v = 0; EMO.v = 0; EMO_EDGE.playing = false; EMO_EDGE.name = ""; }
 
     /** config changed in a screen */
@@ -122,7 +133,7 @@ public final class Live2d {
         try {
             LocalPlayer p = mc.player;
             long now = System.currentTimeMillis();
-            if (p == null) { if (!WRITTEN.isEmpty() || !STATES.isEmpty()) { WRITTEN.clear(); LOCAL.clear(); STATES.clear(); inputsInit = false; } return; }
+            if (p == null) { if (!WRITTEN.isEmpty() || !STATES.isEmpty()) { WRITTEN.clear(); LOCAL.clear(); STATES.clear(); inputsInit = false; } if (!INERT.isEmpty()) { INERT.clear(); PartTrack.reset(); } return; }
             if (cfg == null || now - cfgAt > 1000) { cfg = WheelConfig.get(); cfgAt = now; }
             WheelConfig c = cfg;
             boolean gens = c.l2dGenOn && !c.l2dGens.isEmpty();
@@ -263,6 +274,9 @@ public final class Live2d {
                 for (Live2dMath.Link l : ch.links) need |= !l.off.isEmpty();
                 if (need) { snap = EffectTriggers.peek(p, c); break; }
             }
+            // 1.9.2 real world motion of the anchors (on by default, strength per chain + global)
+            boolean world = c.l2dWorldOn && c.l2dWorldPct > 0;
+            if (world) PartTrack.tick(p);
             Set<String> driven = new HashSet<>(), paused = new HashSet<>(), seen = new HashSet<>();
             boolean anyChange = false;
             // 1.7.1: every link adds its value to its layer; layers are combined and written once per tick
@@ -277,7 +291,27 @@ public final class Live2d {
                     STATES.put(ch.id, st);
                 }
                 float[] out = new float[st.length];
-                Live2dMath.stepChain(ch.links, st, in, 0.05f, out);
+                Live2dMath.stepChainRaw(ch.links, st, in, 0.05f, out);
+                if (world && ch.worldPct != 0) {
+                    float[][] comp = PartTrack.components(ch);
+                    Live2dMath.State[] is = INERT.get(ch.id);
+                    int ep = PartTrack.epochOf(ch.id);
+                    Integer oldEp = INERT_EP.put(ch.id, ep);
+                    if (is == null || is.length != st.length) { is = new Live2dMath.State[st.length]; for (int i = 0; i < is.length; i++) is[i] = new Live2dMath.State(); INERT.put(ch.id, is); }
+                    else if (oldEp == null || oldEp != ep) for (Live2dMath.State q : is) q.init = false;   // restart at rest (teleport, new anchor…)
+                    float[][] vel = new float[st.length][];
+                    for (int i = 0; i < st.length; i++) vel[i] = WorldMath.linkVel(comp, WorldMath.covered(ch.links.get(i)));
+                    float[] io = new float[st.length];
+                    WorldMath.stepInertia(ch.links, is, vel, c.l2dWorldPct / 100f * ch.worldPct / 100f, 0.05f, io);
+                    for (int i = 0; i < st.length; i++) out[i] += io[i];
+                    float fx = 0, fy = 0, fz = 0;
+                    for (float[] q : comp) { fx += q[0]; fy += q[1]; fz += q[2]; }
+                    WLIVE.put(ch.id, new float[]{fx, fy, fz, io.length > 0 ? io[0] : 0});
+                    if (WORLD_DEBUG && p.tickCount % 20 == 0) { int[] wi = PartTrack.info(ch.id);
+                        CpmWheel.LOG.info("[CPM Wheel] world motion {}: part {} src {} detected {} A {} B {} H {} R {} -> {}", ch.name, wi == null ? -1 : wi[0], wi == null ? 0 : wi[1], wi == null ? 0 : wi[2],
+                                java.util.Arrays.toString(comp[0]), java.util.Arrays.toString(comp[1]), java.util.Arrays.toString(comp[2]), java.util.Arrays.toString(comp[3]), java.util.Arrays.toString(io)); }
+                } else { INERT.remove(ch.id); INERT_EP.remove(ch.id); WLIVE.remove(ch.id); }
+                for (int i = 0; i < st.length; i++) out[i] = Live2dMath.limit(ch.links.get(i), out[i]);
                 float[] wt = WEIGHTS.get(ch.id);
                 if (wt == null || wt.length != st.length) { wt = new float[st.length]; java.util.Arrays.fill(wt, 1f); WEIGHTS.put(ch.id, wt); }
                 boolean chainOff = ecOff || (snap != null && TriggerLogic.eval(ch.off, ch.offCombine, snap));
@@ -336,6 +370,7 @@ public final class Live2d {
             }
             STATES.keySet().removeIf(k -> !seen.contains(k));
             WEIGHTS.keySet().removeIf(k -> !seen.contains(k));
+            INERT.keySet().removeIf(k -> !seen.contains(k)); INERT_EP.keySet().removeIf(k -> !seen.contains(k)); WLIVE.keySet().removeIf(k -> !seen.contains(k));
             LIVE.keySet().removeIf(k -> !seen.contains(k.substring(0, k.lastIndexOf('#'))));
             HIST.keySet().removeIf(k -> !seen.contains(k.substring(0, k.lastIndexOf('#'))));
             release(c, paused, driven);

@@ -66,7 +66,14 @@ public class Live2dScreen extends Screen {
         addRenderableWidget(Button.builder(Component.translatable("cpmwheel.l2d.btn.ext"), b -> minecraft.setScreen(new Live2dExtrasScreen(this, cfg)))
                 .tooltip(tip("cpmwheel.l2d.btn.ext.help")).bounds(x + 51, y, 48, 20).build());
         addRenderableWidget(Button.builder(Component.translatable("cpmwheel.l2d.btn.io"), b -> minecraft.setScreen(new Live2dPresetScreen(this, cfg, selChain)))
-                .tooltip(tip("cpmwheel.l2d.btn.io.help")).bounds(x + 101, y, 49, 20).build()); y += 26;
+                .tooltip(tip("cpmwheel.l2d.btn.io.help")).bounds(x + 101, y, 49, 20).build()); y += 22;
+        // 1.9.2 "Movimento no mundo": global switch + strength (each chain has its own strength too)
+        addRenderableWidget(Button.builder(Component.translatable("cpmwheel.l2d.world.on", onoff(cfg.l2dWorldOn)), b -> { cfg.l2dWorldOn = !cfg.l2dWorldOn; Live2d.reset(); rebuildWidgets(); })
+                .tooltip(tip("cpmwheel.l2d.world.help")).bounds(x, y, 74, 20).build());
+        addRenderableWidget(new AbstractSliderButton(x + 76, y, 74, 20, Component.translatable("cpmwheel.l2d.world.pct", cfg.l2dWorldPct + "%"), cfg.l2dWorldPct / 300.0) {
+            @Override protected void updateMessage() { setMessage(Component.translatable("cpmwheel.l2d.world.pct", cfg.l2dWorldPct + "%")); }
+            @Override protected void applyValue() { cfg.l2dWorldPct = (int) Math.round(value * 30) * 10; Live2d.use(cfg); }
+        }).setTooltip(tip("cpmwheel.l2d.world.pct.help")); y += 26;
 
         // chains
         Live2dMath.Chain c = sel();
@@ -122,7 +129,17 @@ public class Live2dScreen extends Screen {
                 new CondEditScreen(this, cfg, Component.translatable("cpmwheel.l2d.off.title"), ch.off, () -> ch.offCombine, v -> ch.offCombine = v,
                         () -> ch.name.isBlank() ? "?" : ch.name).suspendMode(() -> ch.fadeMs, v -> ch.fadeMs = v)))
                 .tooltip(Tooltip.create(Component.translatable("cpmwheel.l2d.off.help").append(ch.off.isEmpty() ? Component.empty() : Component.literal("\n\n" + condsText(ch.off, ch.offCombine)))))
-                .bounds(x2, y2, 150, 20).build()); y2 += 26;
+                .bounds(x2, y2, 150, 20).build()); y2 += 22;
+        // 1.9.2 "Movimento no mundo" of this chain: strength (−300..300 %) and the body part it hangs from
+        addRenderableWidget(new AbstractSliderButton(x2, y2, 74, 20, Component.translatable("cpmwheel.l2d.world.chain", ch.worldPct + "%"), (ch.worldPct + 300) / 600.0) {
+            @Override protected void updateMessage() { setMessage(Component.translatable("cpmwheel.l2d.world.chain", ch.worldPct + "%")); }
+            @Override protected void applyValue() { ch.worldPct = (int) Math.round(value * 60) * 10 - 300; Live2d.use(cfg); }
+        }).setTooltip(tip("cpmwheel.l2d.world.chain.help"));
+        addRenderableWidget(Button.builder(partLabel(ch), b -> {
+            List<String> ps = java.util.Arrays.asList(WorldMath.PART_CHOICES);
+            ch.worldPart = ps.get(Math.floorMod(ps.indexOf(ch.worldPart) + (hasShiftDown() ? -1 : 1), ps.size()));
+            Live2d.use(cfg); rebuildWidgets(); })
+                .tooltip(tip("cpmwheel.l2d.world.part.help")).bounds(x2 + 76, y2, 74, 20).build()); y2 += 26;
         linksY = y2;
         if (selLink >= ch.links.size()) selLink = Math.max(0, ch.links.size() - 1);
         for (int i = 0; i < ch.links.size(); i++) {
@@ -332,6 +349,16 @@ public class Live2dScreen extends Screen {
                     : Component.translatable("cpmwheel.l2d.live", Math.round(lv[0]), lv[1] < 0 ? "-" : String.valueOf((int) lv[1]), lv[2] <= 0 ? "-" : String.valueOf((int) lv[2])).getString() + held;
             if (y3 < height - 4) g.drawString(font, font.plainSubstrByWidth(txt, w3), x3, y3, 0xCFE8F0);
         }
+    }
+    /** "Parte: Auto (cabeça)" — in auto, the part found (CPM bone) or guessed while the physics runs */
+    private Component partLabel(Live2dMath.Chain ch) {
+        String p = ch.worldPart == null ? "auto" : ch.worldPart;
+        Component v = Component.translatable("cpmwheel.l2d.world.part." + p);
+        if ("auto".equals(p)) {
+            int[] info = PartTrack.info(ch.id);
+            if (info != null) v = Component.translatable("cpmwheel.l2d.world.part.autoof", Component.translatable("cpmwheel.l2d.world.part." + WorldMath.PARTS[info[0]]));
+        }
+        return Component.literal(font.plainSubstrByWidth(Component.translatable("cpmwheel.l2d.world.part", v).getString(), 70));
     }
     @Override public void renderBackground(GuiGraphics g, int mx, int my, float pt) {}
     @Override public void onClose() { cfg.fixup(); cfg.save(); Live2d.use(cfg); minecraft.setScreen(parent); }

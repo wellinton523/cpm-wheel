@@ -50,6 +50,12 @@ public class CpmWheel {
         MinecraftForge.EVENT_BUS.addListener(this::tick);
         HandAnim.detectConflicts(id -> ModList.get().isLoaded(id));
         MinecraftForge.EVENT_BUS.addListener((TickEvent.RenderTickEvent e) -> { if (e.phase == TickEvent.Phase.START) HandAnim.frameStart(); });
+        // 1.9.2 "Movimento no mundo": read the real pose of the local player right after it is drawn in the world pass
+        MinecraftForge.EVENT_BUS.addListener((net.minecraftforge.client.event.RenderLevelStageEvent e) -> {
+            if (e.getStage() == net.minecraftforge.client.event.RenderLevelStageEvent.Stage.AFTER_SOLID_BLOCKS) PartTrack.inWorld = true;
+            else if (e.getStage() == net.minecraftforge.client.event.RenderLevelStageEvent.Stage.AFTER_ENTITIES) PartTrack.inWorld = false; });
+        MinecraftForge.EVENT_BUS.addListener((TickEvent.RenderTickEvent e) -> { if (e.phase == TickEvent.Phase.START) PartTrack.inWorld = false; });
+        MinecraftForge.EVENT_BUS.addListener((net.minecraftforge.client.event.RenderPlayerEvent.Post e) -> PartTrack.capture(e.getEntity(), e.getRenderer().getModel()));
         MinecraftForge.EVENT_BUS.addListener((net.minecraftforge.client.event.RenderLevelStageEvent e) -> {
             if (e.getStage() == net.minecraftforge.client.event.RenderLevelStageEvent.Stage.AFTER_ENTITIES)
                 WorldArm.afterEntities(e.getPoseStack(), e.getCamera(), e.getPartialTick()); });

@@ -44,7 +44,10 @@ public final class HangPhysics {
     static volatile java.util.Map<String, int[][]> GROUP = java.util.Map.of(), MOD = java.util.Map.of();
     static volatile int[][][] CAT = new int[HandAnim.CATS.length][][];
 
+    /** 1.9.2 "Movimento no mundo" (global switch): also feel the vehicle's motion while riding */
+    static volatile boolean world = true;
     public static void load(WheelConfig c) {
+        world = c.l2dWorldOn;
         java.util.Map<Item, int[][]> m = new java.util.IdentityHashMap<>();
         java.util.Map<String, int[][]> g = new java.util.HashMap<>(), mo = new java.util.HashMap<>();
         int[][][] cat = new int[HandAnim.CATS.length][][];
@@ -113,6 +116,9 @@ public final class HangPhysics {
         IN.pitch = pitch;
         pYaw = yaw; pPitch = pitch;
         net.minecraft.world.phys.Vec3 mv = p.getDeltaMovement();
+        // 1.9.2: riding, the player's own movement is ~0 while the horse / boat / minecart carries them: use the vehicle's
+        // (same units as before, so walking feels exactly the same)
+        if (world && p.isPassenger() && p.getVehicle() != null) mv = mv.add(p.getVehicle().getDeltaMovement());
         // movement only changes per tick: low-pass it so the drive is smooth between ticks
         float k = 1 - (float) Math.exp(-dt * 18);
         float sy = Mth.sin(yaw * Mth.DEG_TO_RAD), cy = Mth.cos(yaw * Mth.DEG_TO_RAD);

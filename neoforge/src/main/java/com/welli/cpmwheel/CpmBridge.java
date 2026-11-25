@@ -69,9 +69,10 @@ public final class CpmBridge {
         return s;
     }
 
+    private static Method accessGet;
     private static Object access() throws Exception {
-        Class<?> mca = Class.forName("com.tom.cpm.shared.MinecraftClientAccess");
-        return mca.getMethod("get").invoke(null);
+        if (accessGet == null) accessGet = Class.forName("com.tom.cpm.shared.MinecraftClientAccess").getMethod("get");
+        return accessGet.invoke(null);
     }
 
     private static Object registry() throws Exception {
@@ -225,6 +226,184 @@ public final class CpmBridge {
         } catch (Throwable t) {
             predictFailed = true;
             CpmWheel.LOG.warn("[CPM Wheel] local prediction disabled after an error", t);
+        }
+    }
+
+    // ---------- 1.9.2 model tree (real post-animation bone transforms, read-only, fail-safe) ----------
+    private static boolean treeFailed = false;
+    private static Object[] partEnums;
+    /** per-frame reads: methods / fields looked up once per class */
+    private static final Map<String, Method> MCACHE = new HashMap<>();
+    private static final Map<String, java.lang.reflect.Field> FCACHE = new HashMap<>();
+    private static Object callc(Object o, String name, Object... args) throws Exception {
+        if (o == null) return null;
+        String k = o.getClass().getName() + "#" + name + "/" + args.length;
+        Method m = MCACHE.get(k);
+        if (m == null) {
+            outer:
+            for (Class<?> c = o.getClass(); c != null; c = c.getSuperclass()) {
+                List<Class<?>> cs = new ArrayList<>(); cs.add(c); cs.addAll(allInterfaces(c));
+                for (Class<?> q : cs) for (Method x : q.getDeclaredMethods())
+                    if (x.getName().equals(name) && x.getParameterCount() == args.length) { try { x.setAccessible(true); } catch (Throwable ignored) {} m = x; break outer; }
+            }
+            if (m == null) throw new NoSuchMethodException(name);
+            MCACHE.put(k, m);
+        }
+        return m.invoke(o, args);
+    }
+    private static java.lang.reflect.Field fieldc(Class<?> c, String name) {
+        String k = c.getName() + "#" + name;
+        java.lang.reflect.Field f = FCACHE.get(k);
+        if (f == null && !FCACHE.containsKey(k)) { f = field(c, name); FCACHE.put(k, f); }
+        return f;
+    }
+
+    /** the local player's CPM model definition, or null */
+    public static Object definition() {
+        if (treeFailed) return null;
+        try { Object player = callc(access(), "getCurrentClientPlayer"); return player == null ? null : callc(player, "getModelDefinition"); }
+        catch (Throwable t) { return null; }
+    }
+
+    static boolean isA(Object o, String cls) {
+        if (o == null) return false;
+        for (Class<?> c = o.getClass(); c != null; c = c.getSuperclass()) if (c.getName().equals(cls)) return true;
+        return false;
+    }
+    private static final String CUBE = "com.tom.cpm.shared.model.RenderedCube", ROOT = "com.tom.cpm.shared.model.RootModelElement";
+
+    static float[] vec(Object v) throws Exception {
+        if (v == null) return null;
+        java.lang.reflect.Field fx = fieldc(v.getClass(), "x"), fy = fieldc(v.getClass(), "y"), fz = fieldc(v.getClass(), "z");
+        if (fx == null || fy == null || fz == null) return null;
+        return new float[]{fx.getFloat(v), fy.getFloat(v), fz.getFloat(v)};
+    }
+
+    /** post-animation pose {x, y, z, xRot, yRot, zRot} (pixels / radians) of the 6 player part roots this frame; null entries = unknown */
+    public static float[][] rootPoses(Object def, boolean[] need) {
+        float[][] out = new float[6][];
+        if (def == null || treeFailed) return out;
+        try {
+            if (partEnums == null) {
+                Class<?> e = Class.forName("com.tom.cpm.shared.model.PlayerModelParts", true, def.getClass().getClassLoader());
+                partEnums = e.getEnumConstants();
+            }
+            for (int i = 0; i < 6 && i < partEnums.length; i++) {
+                if (need != null && !need[i]) continue;
+                try {
+                    Object pr = callc(def, "getModelElementFor", partEnums[i]);
+                    Object root = pr == null ? null : callc(pr, "getMainRoot");
+                    if (root == null) continue;
+                    float[] pos = vec(callc(root, "getPos")), rot = vec(callc(root, "getRot"));
+                    if (pos == null || rot == null) continue;
+                    out[i] = new float[]{pos[0], pos[1], pos[2], rot[0], rot[1], rot[2]};
+                } catch (Throwable ignored) {}
+            }
+        } catch (Throwable t) {
+            treeFailed = true;
+            CpmWheel.LOG.info("[CPM Wheel] CPM model tree not readable with this CPM version; world motion uses the vanilla pose", t);
+        }
+        return out;
+    }
+
+    /**
+     * point (pixels) where a cube hangs, in the frame of its part root: its pivot carried through every ancestor's current
+     * (post-animation) position / rotation. {0,0,0} when the cube is the root itself; null if unreadable.
+     */
+    public static float[] cubeAnchor(Object cube) {
+        try {
+            if (isA(cube, ROOT)) return new float[]{0, 0, 0};
+            float[] pt = vec(fieldc(cube.getClass(), "pos").get(cube));
+            if (pt == null) return null;
+            Object a = callc(cube, "getParent");
+            for (int guard = 0; a != null && !isA(a, ROOT) && guard < 64; guard++) {
+                float[] ap = vec(fieldc(a.getClass(), "pos").get(a)), ar = vec(fieldc(a.getClass(), "rotation").get(a));
+                if (ap == null || ar == null) return null;
+                pt = WorldMath.apply(new float[]{ap[0], ap[1], ap[2], ar[0], ar[1], ar[2]}, pt);
+                a = callc(a, "getParent");
+            }
+            return a == null ? null : pt;
+        } catch (Throwable t) { return null; }
+    }
+
+    /** index (WorldMath.PARTS) of the player part a cube belongs to, -1 if none (custom / armor roots) */
+    public static int cubePart(Object cube) {
+        try {
+            Object a = cube;
+            for (int guard = 0; a != null && !isA(a, ROOT) && guard < 64; guard++) a = call(a, "getParent");
+            if (a == null) return -1;
+            Object part = call(a, "getPart");
+            String n = part == null ? "" : part.toString().toUpperCase(java.util.Locale.ROOT);
+            switch (n) {
+                case "HEAD": return 0; case "BODY": return 1; case "LEFT_ARM": return 2; case "RIGHT_ARM": return 3;
+                case "LEFT_LEG": return 4; case "RIGHT_LEG": return 5; default: return -1;
+            }
+        } catch (Throwable t) { return -1; }
+    }
+    private static int depth(Object cube) {
+        int d = 0;
+        try { for (Object a = cube; a != null && !isA(a, ROOT) && d < 64; a = call(a, "getParent")) d++; } catch (Throwable ignored) {}
+        return d;
+    }
+
+    /**
+     * The bone a value layer swings: the cube closest to its part root among those its animation rotates (CPM's ValueTrigger /
+     * LayerTrigger for the layer's parameter -> animations -> animated cubes). null if not found.
+     */
+    public static Object layerCube(String anim) {
+        if (treeFailed || anim == null || anim.isBlank()) return null;
+        try {
+            int[] pr = layerParam(anim);
+            Object reg = registry();
+            if (pr == null || reg == null) return null;
+            Object trig = call(reg, "getAnimations");
+            if (!(trig instanceof Collection<?> all)) return null;
+            List<Object> found = new ArrayList<>(), rot = new ArrayList<>();
+            for (Object t : all) {
+                if (t == null) continue;
+                String cn = t.getClass().getSimpleName();
+                if (!cn.endsWith("ValueTrigger") && !cn.endsWith("LayerTrigger")) continue;
+                java.lang.reflect.Field fid = field(t.getClass(), "id"), fan = field(t.getClass(), "animations");
+                if (fid == null || fan == null || fid.getInt(t) != pr[0]) continue;
+                collectCubes(fan.get(t), found, rot);
+            }
+            List<Object> pool = rot.isEmpty() ? found : rot;
+            Object best = null; int bd = Integer.MAX_VALUE;
+            for (Object c : pool) { int d = depth(c); if (d < bd) { bd = d; best = c; } }
+            return best;
+        } catch (Throwable t) { return null; }
+    }
+    /** bounded walk through CPM's animation objects (never into the model / registry) collecting animated cubes */
+    private static void collectCubes(Object start, List<Object> found, List<Object> rot) {
+        Set<Object> seen = Collections.newSetFromMap(new IdentityHashMap<>());
+        Deque<Object[]> q = new ArrayDeque<>();
+        q.add(new Object[]{start, 0, Boolean.FALSE});
+        int budget = 4000;
+        while (!q.isEmpty() && budget-- > 0) {
+            Object[] e = q.poll();
+            Object o = e[0]; int d = (Integer) e[1]; boolean viaRot = (Boolean) e[2];
+            if (o == null || !seen.add(o)) continue;
+            if (isA(o, CUBE)) { if (!found.contains(o)) found.add(o); if (viaRot && !rot.contains(o)) rot.add(o); continue; }
+            if (d > 6) continue;
+            Class<?> c = o.getClass();
+            if (c.isArray()) {
+                if (!c.getComponentType().isPrimitive()) for (Object x : (Object[]) o) q.add(new Object[]{x, d + 1, viaRot});
+                continue;
+            }
+            if (o instanceof Collection<?> col) { for (Object x : col) q.add(new Object[]{x, d + 1, viaRot}); continue; }
+            String n = c.getName();
+            boolean lambda = n.contains("$$Lambda");
+            if (!lambda && !n.startsWith("com.tom.cpm.shared.animation") && !n.startsWith("com.tom.cpm.shared.parts.anim")) continue;
+            if (n.endsWith("AnimationRegistry") || n.endsWith("ModelDefinition") || n.endsWith("AnimationEngine")) continue;
+            boolean r = viaRot || c.getSimpleName().contains("Rot");
+            for (Class<?> k = c; k != null && k != Object.class; k = k.getSuperclass()) {
+                for (java.lang.reflect.Field f : k.getDeclaredFields()) {
+                    if (java.lang.reflect.Modifier.isStatic(f.getModifiers()) || f.getType().isPrimitive()) continue;
+                    String tn = f.getType().getName();
+                    if (tn.endsWith("ModelDefinition") || tn.endsWith("AnimationRegistry") || tn.startsWith("java.lang.String")) continue;
+                    try { f.setAccessible(true); q.add(new Object[]{f.get(o), d + 1, r}); } catch (Throwable ignored) {}
+                }
+            }
         }
     }
 

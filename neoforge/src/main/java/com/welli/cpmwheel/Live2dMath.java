@@ -79,6 +79,10 @@ public final class Live2dMath {
         public List<TriggerLogic.Cond> off = new ArrayList<>();
         public String offCombine = "or";
         public int fadeMs = 300;
+        /** 1.9.2 "Movimento no mundo": strength of the real world motion of the anchor (%, −300..300, 100 = normal, 0 = off,
+         *  negative = opposite direction) and the body part it hangs from ("auto" = found from the CPM bone, else guessed) */
+        public int worldPct = 100;
+        public String worldPart = "auto";
     }
 
     /** 1.7.3: velocity inputs default to mostly sustained, angles (head / body) stay impulse-only like before */
@@ -208,11 +212,17 @@ public final class Live2dMath {
 
     /** steps a whole chain with named input sources; out[i] = output angle */
     public static float[] stepChain(List<Link> links, State[] st, java.util.Map<String, Float> src, float dt, float[] out) {
+        stepChainRaw(links, st, src, dt, out);
+        for (int i = 0; i < links.size(); i++) out[i] = limit(links.get(i), out[i]);
+        return out;
+    }
+    /** 1.9.2: the same before the soft limit (so the world-motion inertia is added first, then limited once) */
+    public static float[] stepChainRaw(List<Link> links, State[] st, java.util.Map<String, Float> src, float dt, float[] out) {
         for (int i = 0; i < links.size(); i++) {
             Link p = links.get(i);
             float g = clamp(p.gain, 0, 300) / 100f;
             float x = drive(p, src, i == 0 ? 0 : st[i - 1].a) * g;
-            out[i] = limit(p, stepLink(st[i], x, held(p, src) * g, p, dt));
+            out[i] = stepLink(st[i], x, held(p, src) * g, p, dt);
         }
         return out;
     }
@@ -466,6 +476,7 @@ public final class Live2dMath {
     public static Chain copy(Chain c, String newId) {
         Chain n = new Chain();
         n.id = newId; n.name = c.name; n.on = c.on; n.offCombine = c.offCombine; n.fadeMs = c.fadeMs;
+        n.worldPct = c.worldPct; n.worldPart = c.worldPart == null ? "auto" : c.worldPart;
         for (Link l : c.links) if (l != null) n.links.add(copy(l));
         if (c.off != null) for (TriggerLogic.Cond q : c.off) if (q != null) n.off.add(copy(q));
         return n;
@@ -474,6 +485,7 @@ public final class Live2dMath {
     public static Chain mirror(Chain c, String newId, String suffix, java.util.Collection<String> layers) {
         Chain n = copy(c, newId);
         n.name = (c.name == null ? "" : c.name) + suffix;
+        n.worldPart = mirrorPart(n.worldPart);   // 1.9.2: left arm / leg <-> right
         List<String> ms = java.util.Arrays.asList(MIRROR);
         for (Link l : n.links) {
             for (Input i : l.inputs) if (ms.contains(i.src)) i.invert = !i.invert;
@@ -481,6 +493,11 @@ public final class Live2dMath {
             l.anim = m != null && layers != null && layers.contains(m) ? m : "";
         }
         return n;
+    }
+    /** 1.9.2: anchor part left <-> right ("larm" <-> "rarm", "lleg" <-> "rleg") */
+    public static String mirrorPart(String p) {
+        if (p == null) return "auto";
+        switch (p) { case "larm": return "rarm"; case "rarm": return "larm"; case "lleg": return "rleg"; case "rleg": return "lleg"; default: return p; }
     }
     private static final String[][] SIDES = {{"left", "right"}, {"esquerda", "direita"}, {"esquerdo", "direito"}, {"esq", "dir"}, {"l", "r"}, {"e", "d"}};
     /** "asa_esq" -> "asa_dir", "WingLeft" not split (only _ - . space separated tokens and Left/Right words); null if nothing to swap */

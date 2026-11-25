@@ -2,7 +2,7 @@
 
 # CPM Wheel
 
-![versão](https://img.shields.io/badge/vers%C3%A3o-1.9.1-2ee6ff)
+![versão](https://img.shields.io/badge/vers%C3%A3o-1.9.2-2ee6ff)
 ![NeoForge 1.21.1](https://img.shields.io/badge/NeoForge-1.21.1%20(21.1.x)-orange)
 ![Forge 1.20.1](https://img.shields.io/badge/Forge-1.20.1%20(47.x)-blue)
 ![lado](https://img.shields.io/badge/lado-cliente-lightgrey)
@@ -32,6 +32,7 @@ Autor: **Zeraph**. Mod só de cliente: o servidor não precisa ter.
 - [Novidades da 1.8.0](#novidades-da-180)
 - [Emotecraft (1.8.1)](#emotecraft-181)
 - [Olhar e piscar (1.8.3)](#olhar-e-piscar-183)
+- [Novidades da 1.9.2](#novidades-da-192)
 - [Novidades da 1.9.1](#novidades-da-191)
 - [Novidades da 1.9.0](#novidades-da-190)
 - [Guia rápido: Física Live2D (cabelo)](#guia-rápido-física-live2d-cabelo)
@@ -252,6 +253,16 @@ Integração **opcional** com o [Emotecraft](https://modrinth.com/mod/emotecraft
 
 ---
 
+## Novidades da 1.9.2
+
+- **Física Live2D com movimento real no mundo (ligado por padrão, integrado):** cada corrente agora sente o movimento de verdade da parte do corpo onde está presa — pulo, queda, empurrão, montaria, elytra, virar o corpo, agachar, o balanço de braços/pernas ao andar e as animações do CPM que mexem aquela parte. Funciona como o ponto de ancoragem do Live2D: acelerar balança, movimento constante volta ao repouso, as pontas chicoteiam. Não é uma entrada nova: nada para configurar. O que a corrente já lê pelas entradas não é contado duas vezes, então as correntes antigas não ficam muito mais fortes.
+- A parte é descoberta sozinha pelo osso do CPM que a primeira camada da corrente mexe (o pivô dele); em terceira pessoa a pose usada é a real do frame (depois das animações do CPM), em primeira pessoa é reconstruída (cabeça, andar, agachar, sentado).
+- Ajustes discretos: Física Live2D › **"Mundo: ON"** + **"Força"** (geral), e em cada corrente **"Mundo 100%"** (−300…300%, 0 = desliga, negativo = lado oposto) e **"Parte: Auto"** (cabeça, corpo, braços, pernas). A prévia mostra a parte, se a pose é real ou aproximada, a velocidade e o ângulo somado, e tem o botão **"Empurrão no mundo"**.
+- Física de pendurado (lanternas na mão): montado, agora sente o movimento do cavalo/barco/carrinho.
+- Teleporte, renascer, trocar de dimensão e travadas recomeçam do repouso (sem tranco gigante). Configuração passa para a versão 29.
+
+---
+
 ## Novidades da 1.9.1
 
 - **Animações da mão por mod:** Configurações › "Animações da mão (detalhes)…" › "Itens e mods..." › "Modo: mod inteiro" › escolha o mod › "Anim. mãos: ON / OFF / OFF princ. / OFF secund.". Cada mão é avaliada pelo item que segura; desligado = desenho normal do Minecraft/CPM, com transição suave. No modo "item" dá para abrir exceções. Comando: `/cpmwheel mod <modid> maos on|off|principal|secundaria`, `/cpmwheel item <id> maos ...|herdar`, `/cpmwheel maos lista`. Padrão: tudo ligado (igual antes).
@@ -347,6 +358,7 @@ Notas completas em cada [release](https://github.com/wellinton523/cpm-wheel/rele
 
 | Versão | Destaques |
 |---|---|
+| [1.9.2](https://github.com/wellinton523/cpm-wheel/releases/tag/v1.9.2) | Física Live2D: as correntes sentem o movimento real da parte do corpo no mundo (pose real do CPM em 3ª pessoa), integrado e ligado por padrão, com força por corrente |
 | [1.9.1](https://github.com/wellinton523/cpm-wheel/releases/tag/v1.9.1) | Animações da mão desligáveis por mod e por item (mão principal/secundária separadas), com comando |
 | [1.9.0](https://github.com/wellinton523/cpm-wheel/releases/tag/v1.9.0) | Overlay dos olhos; olhadinhas, reação a dano, olhar itens/blocos/mobs, modo ocioso; piscar por contexto; exportar/importar perfis (botões e comando) |
 | [1.8.3](https://github.com/wellinton523/cpm-wheel/releases/tag/v1.8.3) | Olhar: área na tela (padrão), nunca a câmera livre, filtros de invisíveis/vanish/linha de visão, manter alvo, olhos suavizados; piscar suave com curva, piscada dupla e camadas extras |
@@ -416,6 +428,7 @@ Notas completas em cada [release](https://github.com/wellinton523/cpm-wheel/rele
   - "Disable when" conditions with fades.
   - 1.8.0: live preview, wind, impacts, look-at, voice (Simple Voice Chat), animation-driven input, breathing/blinking, soft limits, mirroring, presets.
 - 1.8.0: quick emote keys, chained animations, automatic per-model profiles. All new features are off by default.
+- 1.9.2: Live2D physics chains feel the real world motion of the body part they hang from (jumps, falls, knockback, riding, turning, sneaking, walk swing and CPM animations moving that part), integrated and on by default; the anchor is the pivot of the CPM bone the chain's first layer moves, read from CPM's post-animation transforms in third person and rebuilt from the vanilla pose in first person; nothing a chain already reads is counted twice; per-chain strength / part and a global switch; teleports restart at rest. Config v29.
 - 1.9.1: first-person hand animations can be turned off per mod (namespace) or per item, per hand, with a smooth fade (Settings › Hand animations › Items and mods, mode "mod"), plus `/cpmwheel mod <modid> maos on|off|principal|secundaria`. Default unchanged.
 - 1.9.0 (all off by default): eye-aim HUD overlay (no names ever; a small gauge in freecam/F5), intentional glances at newly appeared targets, damage reaction (squint + quick look at an eligible attacker), context blink rate (sun, underwater, rain/sand, aiming), look at the mined block / dropped items / mobs when no player is around, idle wander with sleepy blinks, and profile export/import (UI + `/cpmwheel perfil ...`, validated, never overwrites without confirmation, automatic backup).
 - 1.8.3: look-at picks the target inside a screen area around the centre of your own view (default; "nearest" kept), never the free camera (Freecam/Flashback/ReplayMod/F5/spectating), skips invisible, spectator, off-tab-list, vanish-tagged and out-of-sight entities; stickiness, smoothed eyes (critically damped spring, max speed, saccades, return delay); smooth blink (close/hold/open, curve, double blink, extra layers).

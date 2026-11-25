@@ -32,6 +32,9 @@ public class Live2dPreviewScreen extends MiniScreen {
         btn("cpmwheel.l2d.sim.kick", b -> Live2d.simKick(40), x, y, 74, "cpmwheel.l2d.sim.kick.help");
         btn("cpmwheel.l2d.sim.zero", b -> { Live2d.SIM.clear(); rebuildWidgets(); }, x + 76, y, 74, null);
         y += 22;
+        // 1.9.2: shove the anchors sideways in the world (tests "Movimento no mundo" standing still)
+        btn("cpmwheel.l2d.sim.wkick", b -> Live2d.simWorldKick(), x, y, 150, "cpmwheel.l2d.sim.wkick.help");
+        y += 22;
         btn(Component.translatable("gui.done"), b -> onClose(), x, height - 26, 150, 20, null);
     }
 
@@ -44,7 +47,7 @@ public class Live2dPreviewScreen extends MiniScreen {
         int gx = 168, gy = 26, gw = Math.min(Live2d.HN * 2, width - gx - 120), gh = 34;
         if (!cfg.l2dOn) g.drawString(font, Component.translatable("cpmwheel.l2d.prev.off"), gx, height - 20, 0xFF6060);
         if (ch == null || ch.links.isEmpty()) { g.drawString(font, Component.translatable("cpmwheel.l2d.prev.none"), gx, gy, 0x7FA8B8); return; }
-        int rows = Math.max(1, Math.min(ch.links.size(), (height - gy - 30) / (gh + 12)));
+        int rows = Math.max(1, Math.min(ch.links.size(), (height - gy - 54) / (gh + 12)));
         int idx = Live2d.historyIndex();
         float[] angles = new float[ch.links.size()];
         for (int i = 0; i < rows; i++) {
@@ -72,6 +75,17 @@ public class Live2dPreviewScreen extends MiniScreen {
             }
         }
         g.drawString(font, Component.translatable("cpmwheel.l2d.prev.legend"), gx, height - 32, 0x7FA8B8);
+        // 1.9.2 world motion of this chain's anchor: part, real / approximated pose, velocity, inertia added to link 1
+        float[] wl = Live2d.worldLive(ch.id);
+        int[] wi = PartTrack.info(ch.id);
+        String wt;
+        if (!cfg.l2dWorldOn || ch.worldPct == 0) wt = Component.translatable("cpmwheel.l2d.prev.world.off").getString();
+        else if (wl == null || wi == null) wt = Component.translatable("cpmwheel.l2d.prev.world.none").getString();
+        else wt = Component.translatable("cpmwheel.l2d.prev.world", Component.translatable("cpmwheel.l2d.world.part." + WorldMath.PARTS[wi[0]]),
+                Component.translatable(wi[1] == 2 ? "cpmwheel.l2d.prev.world.real" : "cpmwheel.l2d.prev.world.approx"),
+                String.format(java.util.Locale.ROOT, "%.1f", wl[0]), String.format(java.util.Locale.ROOT, "%.1f", wl[1]), String.format(java.util.Locale.ROOT, "%.1f", wl[2]),
+                Math.round(wl[3])).getString();
+        g.drawString(font, font.plainSubstrByWidth(wt, width - gx - 4), gx, height - 44, 0x9FD8FF);
         // animated chain: each link bends by its output angle, relative to the one above
         int cx = Math.min(width - 60, gx + gw + 60), cy = gy + 20, len = Math.max(14, Math.min(34, (height - 80) / Math.max(1, ch.links.size())));
         double a = Math.PI / 2; float x0 = cx, y0 = cy;

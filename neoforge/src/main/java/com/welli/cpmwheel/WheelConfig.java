@@ -293,12 +293,15 @@ public class WheelConfig {
     public String centerMode = "player";
     /** center size in percent (50-200) */
     public int centerSize = 100;
-    public int configVersion = 28;
+    public int configVersion = 29;
     /** 1.6.0 global switches: extra trigger conditions, timed transitions, custom sounds (per-button / per-rule sounds) */
     public boolean trigCondsOn = true, trigTransOn = true, customSounds = true;
     /** 1.7.0 "Física Live2D": chains of CPM value layers driven by spring physics */
     public boolean l2dOn = false, l2dSync = true, l2dPauseTrig = true;
     public List<Live2dMath.Chain> l2dChains = new ArrayList<>();
+    /** 1.9.2 "Movimento no mundo": the chains feel the real motion of the body part they hang from (on by default) + global strength % */
+    public boolean l2dWorldOn = true;
+    public int l2dWorldPct = 100;
     /** 1.7.1: layer -> how links sharing it combine ("sum" / "avg" / "max"); missing = sum */
     public java.util.Map<String, String> l2dModes = new java.util.HashMap<>();
     /** 1.8.0 Física Live2D extras, all off until turned on: wind, damage / landing impulses, look-at, voice (Simple Voice Chat),
@@ -573,6 +576,9 @@ public class WheelConfig {
                 c.l2dObjItems = c.l2dObjMining = c.l2dObjMobs = true; c.l2dObjOrder = "mining,items,mobs"; }
             if (c.configVersion < 28) { c.configVersion = 28; // 1.9.1: hand animations per mod/item, nothing turned off (same as before)
                 c.haHandsOff = new java.util.LinkedHashMap<>(); }
+            if (c.configVersion < 29) { c.configVersion = 29; // 1.9.2: world motion of the anchors, on at 100 % (each chain 100 %, part auto)
+                c.l2dWorldOn = true; c.l2dWorldPct = 100;
+                if (c.l2dChains != null) for (Live2dMath.Chain ch : c.l2dChains) if (ch != null) { ch.worldPct = 100; ch.worldPart = "auto"; } }
             c.fixup();
             if (c.centerMode == null || c.centerMode.isBlank()) c.centerMode = "player";
             if (c.hudCorner == null || c.hudCorner.isBlank()) c.hudCorner = "top_left";
@@ -642,6 +648,7 @@ public class WheelConfig {
         haItem.entrySet().removeIf(e -> e.getKey() == null || !(e.getKey().endsWith("|main") || e.getKey().endsWith("|off")) || e.getValue() == null || e.getValue().length != 7);
         if (hudPos == null) hudPos = new java.util.HashMap<>();
         // 1.8.0
+        l2dWorldPct = clamp(l2dWorldPct, 0, 300);
         l2dWindPct = clamp(l2dWindPct, 0, 300); l2dImpactPct = clamp(l2dImpactPct, 0, 300); l2dVoicePct = clamp(l2dVoicePct, 0, 300);
         l2dLookRadius = clamp(l2dLookRadius <= 0 ? 8 : l2dLookRadius, 2, 32);
         if (!java.util.List.of("players", "mobs", "both", "off").contains(l2dLookTargets)) l2dLookTargets = "players";
@@ -721,6 +728,8 @@ public class WheelConfig {
             while (ch.links.size() > 8) ch.links.remove(ch.links.size() - 1);
             ch.off = fixConds(ch.off); if (!"and".equals(ch.offCombine)) ch.offCombine = "or";
             ch.fadeMs = Math.max(0, Math.min(3000, ch.fadeMs));
+            ch.worldPct = Math.max(-300, Math.min(300, ch.worldPct));
+            if (!java.util.Arrays.asList(WorldMath.PART_CHOICES).contains(ch.worldPart)) ch.worldPart = "auto";
             for (Live2dMath.Link l : ch.links) {
                 l.off = fixConds(l.off); if (!"and".equals(l.offCombine)) l.offCombine = "or";
                 if (l.anim == null) l.anim = "";
